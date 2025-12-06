@@ -1,9 +1,9 @@
 # 🚀 DataOps Project - Advanced DevOps Course
 
-[![CI - DBT Test](https://github.com/ngocnhan2k4/dataops-project/actions/workflows/ci-dbt-test.yml/badge.svg)](https://github.com/ngocnhan2k4/dataops-project/actions/workflows/ci-dbt-test.yml)
-[![CI - Lint](https://github.com/ngocnhan2k4/dataops-project/actions/workflows/ci-lint.yml/badge.svg)](https://github.com/ngocnhan2k4/dataops-project/actions/workflows/ci-lint.yml)
-[![CI - PR Validation](https://github.com/ngocnhan2k4/dataops-project/actions/workflows/ci-lint.yml/badge.svg)](https://github.com/ngocnhan2k4/dataops-project/actions/workflows/ci-pr-validation.yml)
-[![CD - Deploy](https://github.com/ngocnhan2k4/dataops-project/actions/workflows/cd-deploy.yml/badge.svg)](https://github.com/ngocnhan2k4/dataops-project/actions/workflows/cd-deploy.yml)
+[![CI - DBT Test](https://github.com/tienminhktvndataops-project/actions/workflows/ci-dbt-test.yml/badge.svg)](https://github.com/tienminhktvndataops-project/actions/workflows/ci-dbt-test.yml)
+[![CI - Lint](https://github.com/tienminhktvndataops-project/actions/workflows/ci-lint.yml/badge.svg)](https://github.com/tienminhktvndataops-project/actions/workflows/ci-lint.yml)
+[![CI - PR Validation](https://github.com/tienminhktvndataops-project/actions/workflows/ci-lint.yml/badge.svg)](https://github.com/tienminhktvndataops-project/actions/workflows/ci-pr-validation.yml)
+[![CD - Deploy](https://github.com/tienminhktvndataops-project/actions/workflows/cd-deploy.yml/badge.svg)](https://github.com/tienminhktvndataops-project/actions/workflows/cd-deploy.yml)
 [![DBT Version](https://img.shields.io/badge/DBT-1.5.0-orange?logo=dbt)](https://www.getdbt.com/)
 [![Python Version](https://img.shields.io/badge/Python-3.9-blue?logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-Educational-blue)](LICENSE)
@@ -176,7 +176,7 @@ Tất cả containers được kết nối qua **`dataops_network`** (bridge net
 
 ```bash
 # Clone repository
-git clone https://github.com/ngocnhan2k4/dataops-project
+git clone https://github.com/tienminhktvndataops-project
 cd dataops-project
 
 # Start all containers

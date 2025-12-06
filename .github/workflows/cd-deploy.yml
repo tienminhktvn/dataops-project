@@ -54,7 +54,7 @@ jobs:
           echo "🎯 Deployment Goal: $ENV Environment"
 
   # ===========================================================================
-  # Deploy (Update Containers & Run DBT)
+  # Deploy
   # ===========================================================================
   deploy-and-test:
     name: Deploy & Validate
