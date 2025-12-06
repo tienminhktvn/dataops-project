@@ -96,6 +96,11 @@ sudo su - github-runner
 # Create a directory for the runner
 mkdir -p ~/actions-runner && cd ~/actions-runner
 
+mkdir -p ~/actions-runner/_work/dataops-project/dataops-project
+
+# Setup SLACK_WEBHOOK_URL
+echo "SLACK_WEBHOOK_URL=<YOUR_SLACK_WEBHOOK_URL>" >> .env
+
 # Download the latest runner package
 curl -o actions-runner-linux-x64-2.311.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.311.0/actions-runner-linux-x64-2.311.0.tar.gz
 
@@ -170,118 +175,6 @@ sudo ./svc.sh status
 sudo journalctl -u actions.runner.* -f
 ```
 
-## 📂 Step 5: Clone and Prepare Your Project
-
-```bash
-# Create a workspace directory
-mkdir -p ~/workspace
-cd ~/workspace
-
-# Clone your repository
-git clone https://github.com/ngocnhan2k4/dataops-project.git
-cd dataops-project
-
-# Set proper permissions
-chmod +x sqlserver/entrypoint.sh sqlserver/restore_db.sh
-```
-
-## 🔒 Security Best Practices
-
-### 1. Firewall Configuration
-
-```bash
-# Enable UFW firewall
-sudo ufw enable
-
-# Allow SSH (replace 22 with your SSH port if different)
-sudo ufw allow 22/tcp
-
-# Allow Docker network communication
-sudo ufw allow from 172.16.0.0/12 to any
-
-# Check firewall status
-sudo ufw status
-```
-
-### 2. Secure Docker Socket
-
-```bash
-# The runner user already has Docker access via group membership
-# Verify with:
-groups github-runner
-
-# Should show: github-runner : github-runner docker
-```
-
-### 3. GitHub Secrets Configuration
-
-Add these secrets in your GitHub repository:
-
-- Go to **Settings** → **Secrets and variables** → **Actions**
-- Add any sensitive configuration (database passwords, API keys, etc.)
-
-## 🔍 Troubleshooting
-
-### Runner Not Appearing in GitHub
-
-```bash
-# Check if the service is running
-sudo systemctl status actions.runner.*
-
-# Check logs
-sudo journalctl -u actions.runner.* -f
-
-# Restart the service
-cd ~/actions-runner
-sudo ./svc.sh stop
-sudo ./svc.sh start
-```
-
-### Docker Permission Denied
-
-```bash
-# Ensure user is in docker group
-sudo usermod -aG docker github-runner
-
-# Reboot or restart the service
-sudo reboot
-```
-
-### Container Health Issues
-
-```bash
-# Check container logs
-docker logs dataops-dbt
-docker logs dataops-airflow
-docker logs dataops-sqlserver
-
-# Restart containers
-docker-compose down
-docker-compose up -d --build
-
-# Check disk space
-df -h
-
-# Clean up old Docker resources
-docker system prune -a
-```
-
-### Deployment Fails on First Run
-
-```bash
-# Ensure the project directory exists and is accessible
-cd ~/workspace/dataops-project
-git pull origin main
-
-# Manually run the deployment steps
-docker-compose up -d --build
-sleep 30
-docker exec dataops-dbt dbt deps
-docker exec dataops-dbt dbt run --target dev
-```
-
-## 📊 Monitoring
-
 ### View Runner Logs
 
 ```bash
@@ -320,27 +213,6 @@ sudo ./svc.sh start
 - **Runner credentials**: `~/actions-runner/.credentials`
 - **Service file**: `/etc/systemd/system/actions.runner.*.service`
 - **Project workspace**: Set by GitHub Actions (usually `~/actions-runner/_work`)
-
-## ✅ Verification Checklist
-
-- [ ] Ubuntu system updated
-- [ ] Docker installed and running
-- [ ] Docker Compose installed
-- [ ] GitHub runner configured and connected
-- [ ] Runner service enabled and started
-- [ ] Runner appears in GitHub repository settings
-- [ ] Manual docker-compose test successful
-- [ ] Test deployment via GitHub Actions successful
-- [ ] Firewall configured (if needed)
-- [ ] Monitoring and logs accessible
-
-## 🆘 Support
-
-If you encounter issues:
-
-1. Check the troubleshooting section above
-2. Review GitHub Actions logs in the **Actions** tab
-3. Check runner logs: `sudo journalctl -u actions.runner.* -f`
 
 ---
 
