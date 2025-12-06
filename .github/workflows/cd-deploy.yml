@@ -83,6 +83,8 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Restart Containers
         run: |
+          mkdir -p airflow/logs airflow/plugins airflow/dags
+          sudo chmod -R 777 ./airflow/logs ./airflow/plugins ./airflow/dags
           echo "🔄 Rebuilding and restarting containers..."
           docker compose up -d --build
 
