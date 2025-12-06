@@ -1,0 +1,315 @@
+version: 2
+
+models:
+  # ===========================================================================
+  # GOLD: Daily Sales Summary
+  # ===========================================================================
+  - name: gld_sales_summary
+    description: |
+      ## Gold Layer: Daily Sales Summary
+
+      **Purpose:** Executive dashboard with daily aggregated sales KPIs.
+
+      **Grain:** One row per calendar date
+
+      **Key Metrics:**
+      - Revenue: Total, gross, discounts, tax, freight
+      - Orders: Total orders, line items, unique customers
+      - Channels: Online vs Offline performance
+      - Shipping: On-time delivery rate, average days to ship
+      - Trends: YTD cumulative, moving averages, growth rates
+
+      **Refresh:** Daily via Airflow DAG
+
+      **Target Audience:** Executives, Sales Management, Business Analysts
+
+    columns:
+      - name: order_date
+        description: Calendar date
+        tests:
+          - not_null
+          - unique
+
+      - name: order_year
+        description: Calendar year
+
+      - name: fiscal_year
+        description: Fiscal year (starts July 1)
+
+      - name: total_orders
+        description: Count of distinct orders
+        tests:
+          - not_null
+
+      - name: total_revenue
+        description: Sum of line_total (revenue without tax/freight)
+        tests:
+          - not_null
+
+      - name: total_revenue_with_tax
+        description: Total revenue including tax (order_total_due)
+
+      - name: unique_customers
+        description: Count of distinct customers
+
+      - name: unique_products_sold
+        description: Count of distinct products
+
+      - name: avg_order_value
+        description: Average order value (total_revenue / orders)
+
+      - name: total_discounts_given
+        description: Total discount amount in dollars
+
+      - name: discount_penetration_rate
+        description: Percentage of line items that were discounted
+
+      - name: online_revenue
+        description: Revenue from online channel
+
+      - name: offline_revenue
+        description: Revenue from offline channel
+
+      - name: online_revenue_percentage
+        description: Online revenue as percent of total
+
+      - name: on_time_delivery_rate
+        description: Percentage of shipments delivered on time
+
+      - name: avg_days_to_ship
+        description: Average shipping time in days
+
+      - name: ytd_revenue
+        description: Year-to-date cumulative revenue
+
+      - name: ytd_orders
+        description: Year-to-date cumulative orders
+
+      - name: revenue_growth_dod_percentage
+        description: Day-over-day revenue growth percentage
+
+      - name: revenue_growth_wow_percentage
+        description: Week-over-week revenue growth percentage
+
+      - name: moving_avg_7d_revenue
+        description: 7-day moving average revenue
+
+      - name: moving_avg_30d_revenue
+        description: 30-day moving average revenue
+
+  # ===========================================================================
+  # GOLD: Customer Metrics
+  # ===========================================================================
+  - name: gld_customer_metrics
+    description: |
+      ## Gold Layer: Customer Analytics Mart
+
+      **Purpose:** Customer-level KPIs for marketing and retention programs.
+
+      **Grain:** One row per customer
+
+      **Key Metrics:**
+      - RFM Segmentation: Recency, Frequency, Monetary
+      - Customer Segments: VIP, Champion, Loyal, At Risk, Lost, etc.
+      - Lifetime Value: Total revenue, LTV per month
+      - Engagement: Order frequency, completion rate, engagement score
+      - Risk Analysis: Churn risk score, reactivation potential
+      - Opportunities: Upsell and cross-sell identification
+
+      **Refresh:** Daily via Airflow DAG
+
+      **Target Audience:** Marketing Team, Customer Success, CRM Managers
+
+    columns:
+      - name: customer_id
+        description: Primary key
+        tests:
+          - not_null
+          - unique
+
+      - name: account_number
+        description: Customer account number
+
+      - name: full_name
+        description: Customer name
+
+      - name: customer_segment
+        description: |
+          Primary segment based on RFM analysis:
+          VIP, Champion, Loyal, Potential Loyalist, New Customer,
+          At Risk, Lost, Hibernating, Prospect
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                [
+                  "VIP",
+                  "Champion",
+                  "Loyal",
+                  "Potential Loyalist",
+                  "New Customer",
+                  "At Risk",
+                  "Lost",
+                  "Hibernating",
+                  "Prospect",
+                  "Other",
+                ]
+
+      - name: recency_segment
+        description: Active, Recent, Lapsed, Dormant, Never Purchased
+
+      - name: frequency_segment
+        description: Frequent, Regular, Occasional, One-time, No Orders
+
+      - name: monetary_segment
+        description: VIP, High Value, Medium Value, Low Value, No Value
+
+      - name: lifetime_value
+        description: Total revenue from customer
+        tests:
+          - not_null
+
+      - name: avg_order_value
+        description: Average order value
+
+      - name: total_orders
+        description: Lifetime order count
+
+      - name: customer_value_rating
+        description: 1-5 rating (5=Platinum, 4=Gold, 3=Silver, 2=Bronze, 1=Basic)
+
+      - name: days_since_last_order
+        description: Recency metric (days since last purchase)
+
+      - name: orders_per_month
+        description: Purchase frequency
+
+      - name: engagement_score
+        description: 0-100 score based on recency, frequency, completion rate
+
+      - name: churn_risk_score
+        description: 0-100 score (higher = more risk of churning)
+
+      - name: reactivation_potential
+        description: High/Medium/Low Potential, Not Applicable
+
+      - name: upsell_opportunity
+        description: Upsell opportunity classification
+
+      - name: crosssell_opportunity
+        description: Cross-sell opportunity classification
+
+      - name: recommended_action
+        description: Next best action (VIP Retention, Win-back, etc.)
+
+      - name: marketing_priority
+        description: 1-4 priority level (1=highest)
+
+  # ===========================================================================
+  # GOLD: Product Performance
+  # ===========================================================================
+  - name: gld_product_performance
+    description: |
+      ## Gold Layer: Product Performance Analytics
+
+      **Purpose:** Product-level KPIs for merchandising and inventory decisions.
+
+      **Grain:** One row per product
+
+      **Key Metrics:**
+      - Sales Performance: Orders, revenue, velocity, customer reach
+      - Profitability: Margins, profit ratings, total profit
+      - Classification: ABC analysis, popularity tiers, lifecycle stages
+      - Inventory: Movement category, stock health, days of inventory
+      - Strategic Recommendations: Product strategy, pricing, inventory actions
+      - Scoring: Product health score, management priority
+
+      **Refresh:** Daily via Airflow DAG
+
+      **Target Audience:** Merchandising, Inventory Managers, Product Managers
+
+    columns:
+      - name: product_id
+        description: Primary key
+        tests:
+          - not_null
+          - unique
+
+      - name: product_name
+        description: Product name
+
+      - name: product_number
+        description: Product identifier
+
+      - name: category_name
+        description: Product category
+
+      - name: price_segment
+        description: Premium, Mid-Range, Value, Budget
+
+      - name: list_price
+        description: Standard selling price
+
+      - name: actual_profit_margin_percentage
+        description: Actual profit margin based on sales
+
+      - name: profitability_rating
+        description: 1-5 rating based on profit margin
+
+      - name: total_revenue
+        description: Lifetime revenue generated
+
+      - name: total_units_sold
+        description: Lifetime units sold
+
+      - name: sales_performance_score
+        description: 0-100 score based on revenue, volume, customer reach
+
+      - name: popularity_tier
+        description: Best Seller, Popular, Moderate, Low Demand, No Sales
+
+      - name: revenue_tier
+        description: Top Revenue, High, Medium, Low, No Revenue
+
+      - name: lifecycle_stage
+        description: |
+          New Launch, Growing, Mature, Dormant, End of Life,
+          Discontinued, Never Sold
+
+      - name: abc_classification
+        description: A (top), B (medium), C (low) based on revenue
+
+      - name: velocity_category
+        description: Very Fast, Fast, Moderate, Slow, No Movement
+
+      - name: units_per_day
+        description: Sales velocity (units sold per day)
+
+      - name: revenue_per_day
+        description: Revenue velocity (dollars per day)
+
+      - name: inventory_movement_category
+        description: Fast Moving, Normal, Slow Moving, Dead Stock, Obsolete
+
+      - name: stock_health
+        description: Critical, Warning, Normal, Healthy
+
+      - name: estimated_days_of_inventory
+        description: Estimated days of inventory based on velocity
+
+      - name: strategic_recommendation
+        description: |
+          Invest & Promote, Maintain & Optimize, Test & Learn,
+          Discontinue or Clearance, Markdown or Exit, Liquidate, Monitor
+
+      - name: pricing_recommendation
+        description: Pricing strategy recommendation
+
+      - name: inventory_action
+        description: Recommended inventory action
+
+      - name: product_health_score
+        description: 0-100 overall health score
+
+      - name: management_priority
+        description: 1-4 priority level (1=needs immediate attention)

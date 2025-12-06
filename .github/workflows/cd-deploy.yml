@@ -1,0 +1,154 @@
+# =============================================================================
+# CD WORKFLOW: Deployment (Self-Hosted Server)
+# =============================================================================
+name: CD - Deploy Pipeline (Self-Hosted)
+
+on:
+  push:
+    branches:
+      - main # Production Environment
+      - develop # Development Environment
+    paths:
+      - dbt/**
+      - airflow/**
+      - docker-compose.yaml
+      - .github/workflows/cd-deploy-self-hosted.yml
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: dev
+        type: choice
+        options: [dev, prod]
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ===========================================================================
+  # Determine Environment & Target
+  # ===========================================================================
+  determine-env:
+    name: Setup Environment
+    runs-on: self-hosted
+    outputs:
+      env_name: ${{ steps.set-env.outputs.env_name }}
+      dbt_target: ${{ steps.set-env.outputs.dbt_target }}
+    steps:
+      - name: Resolve Environment
+        id: set-env
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            ENV="prod"
+          else
+            ENV="dev"
+          fi
+
+          echo "env_name=$ENV" >> $GITHUB_OUTPUT
+          echo "dbt_target=$ENV" >> $GITHUB_OUTPUT
+
+          echo "🎯 Deployment Goal: $ENV Environment"
+
+  # ===========================================================================
+  # Deploy (Update Containers & Run DBT)
+  # ===========================================================================
+  deploy-and-test:
+    name: Deploy & Validate
+    runs-on: self-hosted
+    needs: [determine-env]
+    env:
+      TARGET: ${{ needs.determine-env.outputs.dbt_target }}
+
+    steps:
+      # -----------------------------------------------------------------------
+      # Code Update & Backup
+      # -----------------------------------------------------------------------
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          clean: false # Don't wipe the whole directory, just update code
+
+      - name: Create Backup Metadata
+        if: needs.determine-env.outputs.env_name == 'prod'
+        run: |
+          mkdir -p backup
+          echo "Backup for commit ${{ github.sha }}" > backup/deploy_meta_${{ github.sha }}.txt
+
+      # -----------------------------------------------------------------------
+      # Update Infrastructure (Docker)
+      # -----------------------------------------------------------------------
+      - name: Restart Containers
+        run: |
+          echo "🔄 Rebuilding and restarting containers..."
+          docker compose up -d --build
+
+      - name: Wait for Health
+        run: |
+          echo "⏳ Waiting 30s for services to stabilize..."
+          sleep 30
+
+      # -----------------------------------------------------------------------
+      # Execute Pipeline (Inside the Container)
+      # -----------------------------------------------------------------------
+      - name: Install Dependencies
+        run: |
+          echo "📦 Installing DBT deps inside container..."
+          docker exec dataops-dbt dbt deps
+
+      - name: Run Models
+        run: |
+          echo "🚀 Running DBT Models (Target: $TARGET)..."
+          docker exec dataops-dbt dbt run --target $TARGET --full-refresh
+
+      - name: Run Tests
+        run: |
+          echo "🧪 Running Tests..."
+          docker exec dataops-dbt dbt test --target $TARGET
+
+      - name: Generate Documentation
+        run: |
+          echo "📚 Generating Docs..."
+          docker exec dataops-dbt dbt docs generate --target $TARGET
+
+      # -----------------------------------------------------------------------
+      # Artifact Collection (Extract from Container)
+      # -----------------------------------------------------------------------
+      - name: Extract Artifacts
+        if: always()
+        run: |
+          mkdir -p deployment_artifacts
+          docker cp dataops-dbt:/usr/app/dbt/target/run_results.json ./deployment_artifacts/
+          docker cp dataops-dbt:/usr/app/dbt/target/index.html ./deployment_artifacts/
+
+      - name: Upload Logs to GitHub
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-logs-${{ needs.determine-env.outputs.env_name }}
+          path: deployment_artifacts/
+          retention-days: 30
+
+  # ===========================================================================
+  # Notification
+  # ===========================================================================
+  notify:
+    name: Final Status
+    runs-on: self-hosted
+    needs: [determine-env, deploy-and-test]
+    if: always()
+    steps:
+      - name: Generate Report
+        run: |
+          if [ "${{ needs.deploy-and-test.result }}" == "success" ]; then
+            echo "# ✅ Deployment Successful" >> $GITHUB_STEP_SUMMARY
+            echo "Deployed to **${{ needs.determine-env.outputs.env_name }}**" >> $GITHUB_STEP_SUMMARY
+            echo "All dbt models built and tests passed." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "# ❌ Deployment Failed" >> $GITHUB_STEP_SUMMARY
+            echo "Please check the artifacts for error logs." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi

@@ -1,0 +1,120 @@
+# =============================================================================
+# DBT PROJECT CONFIGURATION
+# =============================================================================
+# Name: DataOps Project - AdventureWorks Transformation Pipeline
+# Purpose: Transform raw AdventureWorks data into analytics-ready datasets
+# Architecture: Medallion (Bronze → Silver → Gold)
+# =============================================================================
+
+name: "dataops_project"
+version: "1.0.0"
+config-version: 2
+
+# Profile configuration - references profiles.yml
+profile: "dataops_project"
+
+# Directory paths
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+# Build artifacts location
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+  - "logs"
+
+# =============================================================================
+# MODEL CONFIGURATIONS
+# =============================================================================
+# Defines materialization strategy and schema for each layer
+#
+# BRONZE Layer (Staging):
+#   - Materialized as VIEWS (lightweight, always fresh)
+#   - Purpose: Clean and standardize raw data
+#   - Schema: bronze
+#
+# SILVER Layer (Intermediate):
+#   - Materialized as TABLES (better performance for joins)
+#   - Purpose: Apply business logic and transformations
+#   - Schema: silver
+#
+# GOLD Layer (Marts):
+#   - Materialized as TABLES (optimized for analytics)
+#   - Purpose: Business-ready aggregations and metrics
+#   - Schema: gold
+# =============================================================================
+
+models:
+  dataops_project:
+    # Bronze Layer: Raw data staging
+    bronze:
+      +materialized: view
+      +schema: bronze
+      +tags: ["bronze", "staging"]
+      +docs:
+        node_color: "#CD7F32" # Bronze color
+
+    # Silver Layer: Business logic
+    silver:
+      +materialized: table
+      +schema: silver
+      +tags: ["silver", "intermediate"]
+      +docs:
+        node_color: "#C0C0C0" # Silver color
+
+    # Gold Layer: Analytics marts
+    gold:
+      +materialized: table
+      +schema: gold
+      +tags: ["gold", "marts"]
+      +docs:
+        node_color: "#FFD700" # Gold color
+
+# =============================================================================
+# PROJECT VARIABLES
+# =============================================================================
+# Custom variables accessible in models via {{ var('variable_name') }}
+
+vars:
+  # Date ranges for data processing
+  start_date: "2011-01-01"
+  end_date: "2014-12-31"
+
+  # Business logic constants
+  discount_threshold: 0.1
+  high_value_order: 1000
+
+  # Schema names
+  bronze_schema: "bronze"
+  silver_schema: "silver"
+  gold_schema: "gold"
+
+# =============================================================================
+# ON-RUN-START & ON-RUN-END HOOKS
+# =============================================================================
+# SQL commands to run before and after dbt execution
+
+on-run-start:
+  - "{{ log('========================================', info=True) }}"
+  - "{{ log('Starting DBT run at ' ~ run_started_at, info=True) }}"
+  - "{{ log('Target: ' ~ target.name, info=True) }}"
+  - "{{ log('========================================', info=True) }}"
+
+on-run-end:
+  - "{{ log('========================================', info=True) }}"
+  - "{{ log('DBT run completed at ' ~ run_started_at, info=True) }}"
+  - "{{ log('========================================', info=True) }}"
+
+# =============================================================================
+# DISPATCH CONFIGURATION
+# =============================================================================
+# Configure which macros to use for specific adapters
+
+dispatch:
+  - macro_namespace: dbt_utils
+    search_order: ["dbt_utils", "dataops_project"]

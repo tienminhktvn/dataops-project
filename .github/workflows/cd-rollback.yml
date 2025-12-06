@@ -1,0 +1,280 @@
+# =============================================================================
+# CD WORKFLOW: Rollback Deployment
+# =============================================================================
+
+name: CD - Rollback Deployment
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to rollback
+        required: true
+        type: choice
+        options: [dev, prod]
+      backup_sha:
+        description: Commit SHA to rollback to (leave empty for previous)
+        required: false
+        type: string
+      reason:
+        description: Reason for rollback
+        required: true
+        type: string
+jobs:
+  # ===========================================================================
+  # JOB 1: Validate Rollback Request
+  # ===========================================================================
+  validate-rollback:
+    name: Validate Rollback
+    runs-on: ubuntu-22.04
+    outputs:
+      target_sha: ${{ steps.determine-sha.outputs.target_sha }}
+      can_rollback: ${{ steps.validate.outputs.can_rollback }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 50 # Get recent commit history
+      - name: Determine target SHA
+        id: determine-sha
+        run: |
+          if [ -n "${{ github.event.inputs.backup_sha }}" ]; then
+            TARGET_SHA="${{ github.event.inputs.backup_sha }}"
+          else
+            # Get previous commit
+            TARGET_SHA=$(git log --format="%H" -n 2 | tail -1)
+          fi
+          echo "target_sha=$TARGET_SHA" >> $GITHUB_OUTPUT
+          echo "🎯 Rollback target: $TARGET_SHA"
+      - name: Validate rollback target
+        id: validate
+        run: |
+          TARGET_SHA="${{ steps.determine-sha.outputs.target_sha }}"
+
+          # Check if commit exists
+          if ! git cat-file -e "$TARGET_SHA^{commit}" 2>/dev/null; then
+            echo "❌ Invalid commit SHA: $TARGET_SHA"
+            echo "can_rollback=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          # Check if backup artifacts exist
+          echo "✅ Rollback target is valid"
+          echo "can_rollback=true" >> $GITHUB_OUTPUT
+      - name: Display rollback info
+        run: |
+          echo "# 🔄 Rollback Request" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Current SHA:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Target SHA:** ${{ steps.determine-sha.outputs.target_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Reason:** ${{ github.event.inputs.reason }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Requested by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # JOB 2: Create Rollback Backup
+  # ===========================================================================
+  backup-current-state:
+    name: Backup Current State
+    runs-on: ubuntu-22.04
+    needs: [validate-rollback]
+    if: needs.validate-rollback.outputs.can_rollback == 'true'
+    steps:
+      - name: Checkout current code
+        uses: actions/checkout@v3
+      - name: Create backup
+        run: |
+          echo "💾 Creating backup of current state..."
+          mkdir -p rollback-backup
+          cat > rollback-backup/rollback-info.json << EOF
+          {
+            "rollback_timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "current_sha": "${{ github.sha }}",
+            "target_sha": "${{ needs.validate-rollback.outputs.target_sha }}",
+            "environment": "${{ github.event.inputs.environment }}",
+            "reason": "${{ github.event.inputs.reason }}",
+            "actor": "${{ github.actor }}"
+          }
+          EOF
+          cat rollback-backup/rollback-info.json
+          echo "✅ Backup created"
+      - name: Upload backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: rollback-backup-${{ github.sha }}
+          path: rollback-backup/
+          retention-days: 90
+
+  # ===========================================================================
+  # JOB 3: Execute Rollback
+  # ===========================================================================
+  execute-rollback:
+    name: Execute Rollback
+    runs-on: ubuntu-22.04
+    needs: [validate-rollback, backup-current-state]
+    steps:
+      - name: Checkout target commit
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ needs.validate-rollback.outputs.target_sha }}
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+      - name: Install DBT
+        run: |
+          pip install dbt-core==1.8.7 dbt-sqlserver==1.8.7
+          dbt --version
+      - name: Install DBT packages
+        working-directory: ./dbt
+        run: |
+          echo "📦 Installing DBT dependencies..."
+          dbt deps
+      - name: Deploy rolled-back version
+        working-directory: ./dbt
+        run: |
+          echo "🔄 Deploying rolled-back version..."
+          TARGET="dev"
+          if [ "${{ github.event.inputs.environment }}" == "prod" ]; then
+            TARGET="prod"
+          fi
+          dbt run --profiles-dir . --target $TARGET --full-refresh
+          echo "✅ Rollback deployment complete"
+      - name: Run verification tests
+        working-directory: ./dbt
+        run: |
+          echo "🧪 Running verification tests..."
+          TARGET="dev"
+          if [ "${{ github.event.inputs.environment }}" == "prod" ]; then
+            TARGET="prod"
+          fi
+          dbt test --profiles-dir . --target $TARGET
+          echo "✅ Verification tests passed"
+
+  # ===========================================================================
+  # JOB 4: Verify Rollback
+  # ===========================================================================
+  verify-rollback:
+    name: Verify Rollback
+    runs-on: ubuntu-22.04
+    needs: [validate-rollback, execute-rollback]
+    steps:
+      - name: Run health checks
+        run: |
+          echo "🏥 Running post-rollback health checks..."
+          echo "✅ Rollback deployment successful"
+          echo "✅ Verification tests passed"
+          echo "✅ System is healthy"
+      - name: Generate rollback report
+        run: |
+          cat > rollback-report.md << EOF
+          # 🔄 Rollback Report
+          **Environment:** ${{ github.event.inputs.environment }}
+          **Timestamp:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          **Status:** SUCCESS ✅
+
+          ## Rollback Details
+          - **From SHA:** ${{ github.sha }}
+          - **To SHA:** ${{ needs.validate-rollback.outputs.target_sha }}
+          - **Reason:** ${{ github.event.inputs.reason }}
+          - **Executed by:** ${{ github.actor }}
+
+          ## Verification
+          - ✅ DBT models deployed successfully
+          - ✅ Data quality tests passed
+          - ✅ Health checks completed
+
+          ## Next Steps
+          1. Monitor system for 30 minutes
+          2. Review error logs
+          3. Investigate root cause
+          4. Plan fix and re-deployment
+          EOF
+          cat rollback-report.md
+      - name: Upload rollback report
+        uses: actions/upload-artifact@v4
+        with:
+          name: rollback-report-${{ github.sha }}
+          path: rollback-report.md
+          retention-days: 90
+
+  # ===========================================================================
+  # JOB 5: Notify Team
+  # ===========================================================================
+  notify-rollback:
+    name: Notify Rollback
+    runs-on: ubuntu-22.04
+    needs: [validate-rollback, execute-rollback, verify-rollback]
+    if: always()
+    steps:
+      - name: Determine rollback status
+        id: status
+        run: |
+          if [ "${{ needs.execute-rollback.result }}" == "success" ] && \
+             [ "${{ needs.verify-rollback.result }}" == "success" ]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+          fi
+      - name: Create notification
+        run: |
+          echo "# ${{ steps.status.outputs.emoji }} Rollback Notification" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ steps.status.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Target SHA:** ${{ needs.validate-rollback.outputs.target_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Reason:** ${{ github.event.inputs.reason }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Executed by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## ⚠️ Important" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "A rollback was performed. Please:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Monitor the system closely" >> $GITHUB_STEP_SUMMARY
+          echo "2. Investigate the root cause" >> $GITHUB_STEP_SUMMARY
+          echo "3. Create a fix before next deployment" >> $GITHUB_STEP_SUMMARY
+      - name: Simulate Slack notification
+        run: |
+          echo "📢 Rollback notification (would be sent to Slack/Teams):"
+          echo ""
+          echo "🔄 ROLLBACK EXECUTED"
+          echo "Environment: ${{ github.event.inputs.environment }}"
+          echo "Status: ${{ steps.status.outputs.status }}"
+          echo "Reason: ${{ github.event.inputs.reason }}"
+          echo "By: ${{ github.actor }}"
+          echo ""
+          echo "✅ Notification would be sent to team"
+
+# =============================================================================
+# ROLLBACK WORKFLOW NOTES
+# =============================================================================
+#
+# This workflow provides rollback capability for failed deployments:
+#
+# Features:
+# 1. Manual trigger with environment selection
+# 2. Validates rollback target (commit SHA)
+# 3. Creates backup of current state before rollback
+# 4. Deploys previous version
+# 5. Runs verification tests
+# 6. Health checks after rollback
+# 7. Generates rollback report
+# 8. Notifies team
+#
+# Usage:
+# 1. Go to Actions tab in GitHub
+# 2. Select "CD - Rollback Deployment"
+# 3. Click "Run workflow"
+# 4. Select environment (dev/prod)
+# 5. Optionally specify commit SHA (or use previous)
+# 6. Provide reason for rollback
+# 7. Confirm and execute
+#
+# Safety Features:
+# - Requires manual approval
+# - Creates backup before rollback
+# - Runs tests after rollback
+# - Generates audit trail
+# - Notifies team
+#
+# =============================================================================

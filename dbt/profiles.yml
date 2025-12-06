@@ -1,0 +1,93 @@
+---
+dataops_project:
+  target: dev # Default target environment
+  outputs:
+    dev:
+      type: sqlserver
+      driver: ODBC Driver 17 for SQL Server
+
+      # Connection settings
+      server: sqlserver
+      port: 1433
+      database: AdventureWorks2014
+      schema: dbo
+
+      # Authentication
+      user: sa
+      password: YourStrong@Passw0rd
+      windows_login: false
+      authentication: sql
+
+      # Security settings
+      encrypt: false # Disable encryption for local dev
+      trust_cert: true # Trust self-signed certificates
+
+      # Performance settings
+      threads: 4 # Number of concurrent model builds
+      timeout_seconds: 300 # Query timeout
+      retries: 3 # Number of retry attempts on failure
+      keepalives_idle: 0 # Disable TCP keepalive to prevent connection issues
+
+      # Metadata
+      application_name: dataops_project_dev
+      retry_on_error: true # Auto-retry on transient errors
+    prod:
+      type: sqlserver
+      driver: ODBC Driver 17 for SQL Server
+
+      # Connection settings
+      server: "{{ env_var('PROD_SQL_SERVER', 'sqlserver') }}"
+      port: "{{ env_var('PROD_SQL_PORT', '1433') | int }}"
+      database: "{{ env_var('PROD_DATABASE', 'AdventureWorks2014') }}"
+      schema: dbo
+
+      # Authentication
+      user: "{{ env_var('PROD_SQL_USER', 'sa') }}"
+      password: "{{ env_var('PROD_SQL_PASSWORD', 'YourStrong@Passw0rd') }}"
+      windows_login: false
+      authentication: sql
+
+      # Security settings
+      encrypt: false
+      trust_cert: true
+
+      # Performance settings
+      threads: 8
+      timeout_seconds: 600
+      retries: 5
+      keepalives_idle: 0
+
+      # Metadata
+      application_name: dataops_project_prod
+      retry_on_error: true
+
+    # Used by GitHub Actions for automated testing
+    ci:
+      type: sqlserver
+      driver: ODBC Driver 17 for SQL Server
+
+      # Connection settings from environment variables
+      server: "{{ env_var('SQL_SERVER_HOST') }}"
+      port: "{{ env_var('SQL_SERVER_PORT', '1433') | int }}"
+      database: "{{ env_var('SQL_DATABASE') }}"
+      schema: dbo
+
+      # Authentication from secrets
+      user: "{{ env_var('SQL_USER') }}"
+      password: "{{ env_var('SQL_PASSWORD') }}"
+      windows_login: false
+      authentication: sql
+
+      # Security settings
+      encrypt: false
+      trust_cert: true
+
+      # Performance settings
+      threads: 2
+      timeout_seconds: 180
+      retries: 2
+      keepalives_idle: 0
+
+      # Metadata
+      application_name: dataops_project_ci
+      retry_on_error: true

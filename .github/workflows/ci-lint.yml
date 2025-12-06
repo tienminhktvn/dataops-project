@@ -1,0 +1,184 @@
+# =============================================================================
+# CI WORKFLOW: Code Linting
+# =============================================================================
+name: CI - Code Linting
+
+on:
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# -----------------------------------------------------------------------------
+# GLOBAL ENV
+# -----------------------------------------------------------------------------
+env:
+  DBT_PROFILES_DIR: ./dbt
+  SQL_SERVER_HOST: localhost
+  SQL_SERVER_PORT: 1433
+  SQL_DATABASE: tempdb
+  SQL_USER: sa
+  SQL_PASSWORD: YourStrong@Passw0rd
+
+jobs:
+  # ===========================================================================
+  # SQL Linting
+  # ===========================================================================
+  sql-lint:
+    name: SQL Linting (SQLFluff)
+    runs-on: ubuntu-22.04
+
+    # -------------------------------------------------------------------------
+    # SERVICE: SQL Server
+    # -------------------------------------------------------------------------
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2019-latest
+        ports: [1433:1433]
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: YourStrong@Passw0rd
+          MSSQL_PID: Express
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      # -----------------------------------------------------------------------
+      # Wait for Database to Start
+      # -----------------------------------------------------------------------
+      - name: Wait for SQL Server
+        run: |
+          echo "⏳ Waiting 30 seconds for SQL Server to warm up..."
+          sleep 30
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unixodbc-dev
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc
+          curl https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql17
+
+      - name: Install SQLFluff
+        run: |
+          pip install "sqlfluff>=3.0.0" "sqlfluff-templater-dbt>=3.0.0" "dbt-sqlserver"
+
+      - name: Prepare DBT
+        run: |
+          dbt deps --project-dir dbt
+          dbt parse --project-dir dbt --target ci
+
+      - name: Lint SQL files
+        run: |
+          echo "🔍 Linting SQL files..."
+          sqlfluff lint dbt/models/ \
+            --config .sqlfluff \
+            --processes 4 \
+            --format github-annotation \
+            --annotation-level failure
+
+      - name: Generate SQL linting report
+        if: always()
+        run: |
+          echo "📊 Generating linting report..."
+          sqlfluff lint dbt/models/ --format human > sql-lint-report.txt || true
+          cat sql-lint-report.txt
+
+      - name: Upload SQL lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sql-lint-report
+          path: sql-lint-report.txt
+          retention-days: 7
+
+  # ===========================================================================
+  # Python Linting
+  # ===========================================================================
+  python-lint:
+    name: Python Linting
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+      - name: Install Flake8
+        run: pip install flake8==6.0.0
+      - name: Lint Python files
+        run: |
+          flake8 . --config .flake8 --count --statistics --show-source
+      - name: Check for critical errors
+        run: |
+          echo "🚨 Checking for critical Python errors..."
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+  # ===========================================================================
+  # Python Formatting
+  # ===========================================================================
+  python-format-check:
+    name: Python Formatting
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+      - name: Install Black
+        run: pip install black==23.3.0
+      - name: Check Python formatting
+        run: |
+          black --check --diff airflow/
+
+  # ===========================================================================
+  # YAML Linting
+  # ===========================================================================
+  yaml-lint:
+    name: YAML Linting
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+      - name: Install yamllint
+        run: pip install yamllint==1.32.0
+      - name: Lint YAML files
+        run: |
+          yamllint -c .yamllint dbt/models/ dbt/*.yml .github/
+
+  # ===========================================================================
+  # Linting Summary
+  # ===========================================================================
+  lint-summary:
+    name: Linting Summary
+    runs-on: ubuntu-22.04
+    needs: [sql-lint, python-lint, python-format-check, yaml-lint]
+    if: always()
+    steps:
+      - name: Generate Summary
+        run: |-
+          echo "# 🧹 Code Quality Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Linter | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| SQL (SQLFluff) | ${{ needs.sql-lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python (Flake8) | ${{ needs.python-lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python (Black) | ${{ needs.python-format-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| YAML | ${{ needs.yaml-lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "**Pull Request:** #${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,275 @@
+---
+# =============================================================================
+# SOURCE DEFINITIONS
+# =============================================================================
+version: 2
+sources:
+  # ---------------------------------------------------------------------------
+  # SALES SCHEMA - Transactional Sales Data
+  # ---------------------------------------------------------------------------
+  - name: adventureworks_sales
+    description: |
+      Sales-related tables from AdventureWorks2014 database.
+      Contains orders, order details, customers, and sales territory information.
+    database: AdventureWorks2014
+    schema: Sales
+
+    # Source Freshness Configuration
+    freshness:
+      warn_after: {count: 30, period: day}  # Warning after 30 days
+      error_after: {count: 7300, period: day}  # 20 year
+    loaded_at_field: ModifiedDate  # Column tracking last update time
+    tables:
+      # -----------------------------------------------------------------------
+      # Sales Order Header
+      # -----------------------------------------------------------------------
+      - name: SalesOrderHeader
+        description: |
+          General sales order information including customer, sales person,
+          dates, and order totals.
+          Primary Key: SalesOrderID
+          Updated: Real-time with each order
+        columns:
+          - name: SalesOrderID
+            description: Primary key for sales orders
+            tests: [not_null, unique]
+          - name: OrderDate
+            description: Date the order was placed
+            tests: [not_null]
+          - name: DueDate
+            description: Date the order is due to ship
+          - name: ShipDate
+            description: Date the order was shipped
+          - name: Status
+            description: |
+              Order status:
+              1 = In process
+              2 = Approved
+              3 = Backordered
+              4 = Rejected
+              5 = Shipped
+              6 = Cancelled
+            tests:
+              - accepted_values:
+                  values: [1, 2, 3, 4, 5, 6]
+          - name: OnlineOrderFlag
+            description: |
+              0 = Order placed by sales person
+              1 = Order placed online by customer
+          - name: CustomerID
+            description: Foreign key to Customer table
+            tests: [not_null]
+          - name: SalesPersonID
+            description: Foreign key to SalesPerson table
+          - name: TerritoryID
+            description: Foreign key to SalesTerritory table
+          - name: SubTotal
+            description: Order subtotal before tax and shipping
+          - name: TaxAmt
+            description: Tax amount
+          - name: Freight
+            description: Shipping cost
+          - name: TotalDue
+            description: Total due from customer (SubTotal + TaxAmt + Freight)
+
+      # -----------------------------------------------------------------------
+      # Sales Order Detail
+      # -----------------------------------------------------------------------
+      - name: SalesOrderDetail
+        description: |
+          Individual line items for sales orders.
+          Each row represents one product in an order.
+          Primary Key: SalesOrderID + SalesOrderDetailID
+          Foreign Key: SalesOrderID → SalesOrderHeader
+        columns:
+          - name: SalesOrderID
+            description: Foreign key to SalesOrderHeader
+            tests: [not_null]
+          - name: SalesOrderDetailID
+            description: Line item number within the order
+            tests: [not_null]
+          - name: ProductID
+            description: Foreign key to Product table
+            tests: [not_null]
+          - name: OrderQty
+            description: Quantity ordered
+            tests: [not_null]
+          - name: UnitPrice
+            description: Selling price of a single unit
+            tests: [not_null]
+          - name: UnitPriceDiscount
+            description: Discount amount per unit
+          - name: LineTotal
+            description: Per product subtotal (UnitPrice * OrderQty * (1 - UnitPriceDiscount))
+
+      # -----------------------------------------------------------------------
+      # Customer
+      # -----------------------------------------------------------------------
+      - name: Customer
+        description: |
+          Current customer information.
+          Links to Person and Store tables for detailed information.
+          Primary Key: CustomerID
+        columns:
+          - name: CustomerID
+            description: Primary key
+            tests: [not_null, unique]
+          - name: PersonID
+            description: Foreign key to Person table (for individual customers)
+          - name: StoreID
+            description: Foreign key to Store table (for business customers)
+          - name: TerritoryID
+            description: Foreign key to SalesTerritory table
+          - name: AccountNumber
+            description: Unique customer account number
+
+  # ---------------------------------------------------------------------------
+  # PRODUCTION SCHEMA - Product Information
+  # ---------------------------------------------------------------------------
+  - name: adventureworks_production
+    description: |
+      Product-related tables from AdventureWorks2014.
+      Contains products, categories, and inventory information.
+    database: AdventureWorks2014
+    schema: Production
+    freshness:
+      warn_after: {count: 30, period: day}
+      error_after: {count: 7300, period: day}  # 20 years
+    loaded_at_field: ModifiedDate
+    tables:
+      # -----------------------------------------------------------------------
+      # Product
+      # -----------------------------------------------------------------------
+      - name: Product
+        description: |
+          Products sold or used in manufacturing.
+          Primary Key: ProductID
+        columns:
+          - name: ProductID
+            description: Primary key
+            tests: [not_null, unique]
+          - name: Name
+            description: Product name
+            tests: [not_null]
+          - name: ProductNumber
+            description: Unique product identification number
+            tests: [not_null, unique]
+          - name: MakeFlag
+            description: |
+              0 = Product is purchased
+              1 = Product is manufactured
+          - name: FinishedGoodsFlag
+            description: |
+              0 = Product is not a salable item
+              1 = Product is salable
+          - name: Color
+            description: Product color
+          - name: SafetyStockLevel
+            description: Minimum inventory quantity
+          - name: ReorderPoint
+            description: Inventory level that triggers a purchase order
+          - name: StandardCost
+            description: Standard cost of the product
+          - name: ListPrice
+            description: Selling price
+            tests: [not_null]
+          - name: Size
+            description: Product size
+          - name: Weight
+            description: Product weight
+          - name: ProductCategoryID
+            description: Foreign key to ProductCategory
+          - name: ProductSubcategoryID
+            description: Foreign key to ProductSubcategory
+          - name: ProductModelID
+            description: Foreign key to ProductModel
+          - name: SellStartDate
+            description: Date the product was available for sale
+            tests: [not_null]
+          - name: SellEndDate
+            description: Date the product was no longer available
+          - name: DiscontinuedDate
+            description: Date the product was discontinued
+
+      # -----------------------------------------------------------------------
+      # Product Subcategory
+      # -----------------------------------------------------------------------
+      - name: ProductSubcategory
+        description: |
+          Product subcategories classification.
+          Primary Key: ProductSubcategoryID
+        columns:
+          - name: ProductSubcategoryID
+            description: Primary key
+            tests: [not_null, unique]
+          - name: ProductCategoryID
+            description: Foreign key to ProductCategory
+            tests: [not_null]
+          - name: Name
+            description: Subcategory name
+            tests:
+              - not_null
+
+      # -----------------------------------------------------------------------
+      # Product Category
+      # -----------------------------------------------------------------------
+      - name: ProductCategory
+        description: |
+          High-level product categorization.
+          Primary Key: ProductCategoryID
+        columns:
+          - name: ProductCategoryID
+            description: Primary key
+            tests: [not_null, unique]
+          - name: Name
+            description: Category name
+            tests:
+              - not_null
+
+  # ---------------------------------------------------------------------------
+  # PERSON SCHEMA - People and Contact Information
+  # ---------------------------------------------------------------------------
+  - name: adventureworks_person
+    description: |
+      Person-related tables from AdventureWorks2014.
+      Contains individual person information, addresses, and contacts.
+    database: AdventureWorks2014
+    schema: Person
+    freshness:
+      warn_after: {count: 30, period: day}
+      error_after: {count: 7300, period: day}  # 20 years
+    loaded_at_field: ModifiedDate
+    tables:
+      # -----------------------------------------------------------------------
+      # Person
+      # -----------------------------------------------------------------------
+      - name: Person
+        description: |
+          Human beings involved with AdventureWorks:
+          customer, contact, employee, vendor, etc.
+          Primary Key: BusinessEntityID
+        columns:
+          - name: BusinessEntityID
+            description: Primary key (links to BusinessEntity table)
+            tests: [not_null, unique]
+          - name: PersonType
+            description: |
+              Type of person:
+              SC = Store Contact
+              IN = Individual Customer
+              SP = Sales Person
+              EM = Employee
+              VC = Vendor Contact
+              GC = General Contact
+          - name: Title
+            description: Title (Mr., Ms., Dr., etc.)
+          - name: FirstName
+            description: First name
+            tests: [not_null]
+          - name: MiddleName
+            description: Middle name or initial
+          - name: LastName
+            description: Last name
+            tests: [not_null]
+          - name: Suffix
+            description: Surname suffix (Jr., Sr., etc.)

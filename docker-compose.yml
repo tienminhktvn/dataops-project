@@ -1,0 +1,177 @@
+x-airflow-common: &airflow-common
+  build:
+    context: ./airflow
+    dockerfile: Dockerfile
+  env_file:
+    - .env
+  environment:
+    - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+    - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+    - AIRFLOW__CORE__LOAD_EXAMPLES=False
+    - AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+    - AIRFLOW__WEBSERVER__SECRET_KEY=mysecretkey
+    - AIRFLOW_CONN_SQLSERVER_DEFAULT=mssql://sa:YourStrong%40Passw0rd@sqlserver:1433/AdventureWorks2014
+    - AIRFLOW_VAR_SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/logs:/opt/airflow/logs
+    - ./airflow/plugins:/opt/airflow/plugins
+    - /var/run/docker.sock:/var/run/docker.sock
+  networks:
+    - dataops_network
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  # ---------------------------------------------------------------------------
+  # SQL SERVER
+  # ---------------------------------------------------------------------------
+  # Chứa AdventureWorks2014 database - raw data
+  sqlserver:
+    build:
+      context: ./sqlserver
+      dockerfile: Dockerfile
+    container_name: dataops-sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong@Passw0rd
+      - MSSQL_PID=Express
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - dataops_network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/opt/mssql-tools/bin/sqlcmd",
+          "-S",
+          "localhost",
+          "-U",
+          "sa",
+          "-P",
+          "YourStrong@Passw0rd",
+          "-Q",
+          "SELECT 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # POSTGRESQL - Airflow Metadata Database
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:13
+    container_name: dataops-postgres
+    environment:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - dataops_network
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+      timeout: 5s
+
+  # ---------------------------------------------------------------------------
+  # AIRFLOW WEBSERVER
+  # ---------------------------------------------------------------------------
+  airflow-webserver:
+    <<: *airflow-common # Inherits everything from x-airflow-common
+    container_name: dataops-airflow-webserver
+    ports:
+      - "8080:8080"
+    command: >
+      bash -c "
+      airflow db migrate &&
+      airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin &&
+      airflow webserver
+      "
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # AIRFLOW SCHEDULER - Task Orchestrator
+  # ---------------------------------------------------------------------------
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: dataops-airflow-scheduler
+    command: airflow scheduler
+
+  # ---------------------------------------------------------------------------
+  # DBT - Data Transformation Engine
+  # ---------------------------------------------------------------------------
+  dbt:
+    build:
+      context: ./dbt
+      dockerfile: Dockerfile
+    container_name: dataops-dbt
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./dbt:/usr/app/dbt
+    working_dir: /usr/app/dbt
+    command: >
+      bash -c "
+      echo 'Installing dbt dependencies...' &&
+      dbt deps &&
+      echo 'Generating documentation...' &&
+      dbt docs generate --target dev &&
+      echo 'Serving docs at http://0.0.0.0:8001' &&
+      dbt docs serve --host 0.0.0.0 --port 8001
+      "
+    networks:
+      - dataops_network
+
+  # ---------------------------------------------------------------------------
+  # CLOUD BEAVER
+  # ---------------------------------------------------------------------------
+  cloudbeaver:
+    image: dbeaver/cloudbeaver
+    container_name: cloudbeaver
+    restart: always
+    ports:
+      - "8978:8978"
+    networks:
+      - dataops_network
+    environment:
+      # ADMIN SETUP
+      - CB_SERVER_NAME=DataOps Server
+      - CB_ADMIN_NAME=cbadmin
+      - CB_ADMIN_PASSWORD=MyComplexPassword123!
+    volumes:
+      - cloudbeaver_data:/opt/cloudbeaver/workspace
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+volumes:
+  sqlserver_data:
+    driver: local
+  postgres_data:
+    driver: local
+  cloudbeaver_data:
+    driver: local
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+networks:
+  dataops_network:
+    driver: bridge

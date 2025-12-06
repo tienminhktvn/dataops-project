@@ -1,0 +1,56 @@
+# ===========================
+# System & IDE Files
+# ===========================
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# ===========================
+# Secrets & Environment
+# ===========================
+.env
+.env.local
+
+# ===========================
+# Python / General
+# ===========================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ===========================
+# Airflow Generated Content
+# ===========================
+# These are mapped in your docker-compose
+airflow/logs/
+airflow/*.pid
+airflow/*.err
+airflow/*.log
+
+# ===========================
+# 5. DBT Generated Content
+# ===========================
+# Compiled SQL and build artifacts
+dbt/target/
+**/.user.yml
+# Execution logs
+dbt/logs/
+# External dependencies
+dbt/dbt_packages/
+dbt/dbt_modules/
+
+# ===========================
+# Docker / Database Data
+# ===========================
+cloudbeaver_data/
+postgres_data/
+sqlserver_data/
+
+# ===========================
+# CI/CD & Testing
+# ===========================
+# Ignore local coverage reports
+htmlcov/
+.coverage

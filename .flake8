@@ -1,0 +1,5 @@
+[flake8]
+max-line-length = 400
+exclude = .git,__pycache__,venv,dbt/target,dbt/dbt_packages
+ignore = E203,E266,E501,W503
+max-complexity = 10

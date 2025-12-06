@@ -1,0 +1,249 @@
+# =============================================================================
+# CI WORKFLOW: Pull Request Validation
+# =============================================================================
+name: CI - PR Validation
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches: [main, develop]
+jobs:
+  # ===========================================================================
+  # PR Title Validation
+  # ===========================================================================
+  validate-pr-title:
+    name: Validate PR Title
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check PR title format
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            test
+            chore
+            ci
+            perf
+            config
+          requireScope: false
+          subjectPattern: ^[A-Z].+$
+          subjectPatternError: |
+            The subject "{subject}" found in the pull request title "{title}"
+            must start with a capital letter.
+        continue-on-error: true
+      - name: Validate title length
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          LENGTH=${#TITLE}
+          echo "📏 PR Title: $TITLE"
+          echo "📏 Length: $LENGTH characters"
+          if [ $LENGTH -lt 10 ]; then
+            echo "❌ PR title too short (minimum 10 characters)"
+            exit 1
+          fi
+          if [ $LENGTH -gt 100 ]; then
+            echo "⚠️ PR title quite long (>100 characters)"
+          fi
+          echo "✅ PR title length is acceptable"
+
+  # ===========================================================================
+  # Check for Merge Conflicts
+  # ===========================================================================
+  check-merge-conflicts:
+    name: Check Merge Conflicts
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Check for merge conflicts
+        run: |
+          echo "🔍 Checking for merge conflicts..."
+
+          # Check if PR has conflicts
+          if git merge-tree $(git merge-base HEAD origin/${{ github.base_ref }}) origin/${{ github.base_ref }} HEAD | grep -q '<<<<<<<'; then
+            echo "❌ Merge conflicts detected!"
+            echo "Please resolve conflicts before merging."
+            exit 1
+          else
+            echo "✅ No merge conflicts found"
+          fi
+
+  # ===========================================================================
+  # File Size Validation
+  # ===========================================================================
+  check-file-sizes:
+    name: Check File Sizes
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Check for large files
+        run: |
+          echo "📁 Checking for large files..."
+
+          # Find files larger than 1MB
+          LARGE_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | \
+            xargs -I {} sh -c 'if [ -f "{}" ]; then stat -f%z "{}" 2>/dev/null || stat -c%s "{}" 2>/dev/null; echo "{}"; fi' | \
+            paste -d " " - - | \
+            awk '$1 > 1048576 {print $2, "(" $1/1048576 "MB)"}')
+          if [ -n "$LARGE_FILES" ]; then
+            echo "⚠️ Large files detected:"
+            echo "$LARGE_FILES"
+            echo ""
+            echo "Consider:"
+            echo "- Using Git LFS for binary files"
+            echo "- Compressing files"
+            echo "- Moving to external storage"
+          else
+            echo "✅ No large files found"
+          fi
+      - name: Check for binary files
+        run: |
+          echo "🔍 Checking for binary files..."
+          BINARY_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | \
+            xargs -I {} sh -c 'if [ -f "{}" ] && file "{}" | grep -q "executable\|binary\|archive"; then echo "{}"; fi')
+          if [ -n "$BINARY_FILES" ]; then
+            echo "⚠️ Binary files detected:"
+            echo "$BINARY_FILES"
+          else
+            echo "✅ No unexpected binary files"
+          fi
+
+  # ===========================================================================
+  # Validate Changed Files
+  # ===========================================================================
+  validate-changed-files:
+    name: Validate Changed Files
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Get changed files
+        id: changed-files
+        run: |
+          echo "📋 Getting changed files..."
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          echo "$CHANGED_FILES"
+          echo "changed_files<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      - name: Check for sensitive files
+        run: |
+          echo "🔒 Checking for sensitive files..."
+          ALL_FILES="${{ steps.changed-files.outputs.changed_files }}"
+          FILES_TO_CHECK=$(echo "$ALL_FILES" | grep -v "\.env\.example")
+          SENSITIVE_PATTERNS=".env .key .pem .p12 credentials password secret"
+          FOUND_SENSITIVE=false
+          for pattern in $SENSITIVE_PATTERNS; do
+            if echo "$FILES_TO_CHECK" | grep -i "$pattern"; then
+              echo "⚠️ Found file matching sensitive pattern: $pattern"
+              FOUND_SENSITIVE=true
+            fi
+          done
+          if [ "$FOUND_SENSITIVE" = true ]; then
+            echo ""
+            echo "❌ Sensitive files detected!"
+            echo "Please review and ensure no credentials are committed."
+            exit 1
+          else
+            echo "✅ No sensitive files detected"
+          fi
+      - name: Validate DBT file structure
+        if: contains(steps.changed-files.outputs.changed_files, 'dbt/')
+        run: |
+          echo "🔍 Validating DBT file structure..."
+
+          # Check if models have corresponding schema.yml
+          MODELS=$(echo "${{ steps.changed-files.outputs.changed_files }}" | grep 'dbt/models/.*\.sql$' || true)
+          if [ -n "$MODELS" ]; then
+            echo "📝 SQL models changed:"
+            echo "$MODELS"
+            echo ""
+            echo "⚠️ Reminder: Ensure schema.yml is updated with:"
+            echo "  - Model description"
+            echo "  - Column descriptions"
+            echo "  - Tests"
+          fi
+          echo "✅ DBT structure validation complete"
+
+  # ===========================================================================
+  # Label Suggestion
+  # ===========================================================================
+  suggest-labels:
+    name: Suggest PR Labels
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Suggest labels based on changed files
+        run: |
+          echo "🏷️ Suggesting labels based on changes..."
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          echo "## Suggested Labels" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if echo "$CHANGED_FILES" | grep -q "dbt/models/bronze/"; then
+            echo "- \`bronze-layer\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          if echo "$CHANGED_FILES" | grep -q "dbt/models/silver/"; then
+            echo "- \`silver-layer\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          if echo "$CHANGED_FILES" | grep -q "dbt/models/gold/"; then
+            echo "- \`gold-layer\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          if echo "$CHANGED_FILES" | grep -q ".github/workflows/"; then
+            echo "- \`ci-cd\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          if echo "$CHANGED_FILES" | grep -q "airflow/"; then
+            echo "- \`airflow\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          if echo "$CHANGED_FILES" | grep -q "\.md$"; then
+            echo "- \`documentation\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          if echo "$CHANGED_FILES" | grep -q "dbt/tests/"; then
+            echo "- \`testing\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ===========================================================================
+  # Validation Summary
+  # ===========================================================================
+  validation-summary:
+    name: Validation Summary
+    runs-on: ubuntu-22.04
+    needs:
+      - validate-pr-title
+      - check-merge-conflicts
+      - check-file-sizes
+      - validate-changed-files
+    if: always()
+    steps:
+      - name: Generate Summary
+        run: |-
+          echo "# ✅ Pull Request Validation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| PR Title | ${{ needs.validate-pr-title.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Merge Conflicts | ${{ needs.check-merge-conflicts.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| File Sizes | ${{ needs.check-file-sizes.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Changed Files | ${{ needs.validate-changed-files.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**PR:**  #${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Author:** @${{ github.event.pull_request.user.login }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.head_ref }} → ${{ github.base_ref }}" >> $GITHUB_STEP_SUMMARY

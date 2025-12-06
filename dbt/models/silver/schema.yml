@@ -1,0 +1,368 @@
+version: 2
+
+models:
+  # ===========================================================================
+  # SILVER: Sales Orders (Enriched)
+  # ===========================================================================
+  - name: slvr_sales_orders
+    description: |
+      ## Silver Layer: Enriched Sales Orders
+
+      **Purpose:** Business logic enriched sales order data with time intelligence,
+      categorization, and performance metrics.
+
+      **Grain:** One row per order line item
+
+      **Key Enhancements:**
+      - Time dimensions (fiscal year/quarter, day of week, etc.)
+      - Order value categorization (Enterprise, High, Medium, Standard)
+      - Shipping performance analysis (On Time, Late, shipping speed)
+      - Discount strategy classification
+      - Window functions (ranking, cumulative totals)
+
+      **Downstream Usage:** Gold layer aggregations
+
+    columns:
+      - name: sales_order_id
+        description: Order identifier
+        tests:
+          - not_null
+
+      - name: order_detail_id
+        description: Line item identifier
+        tests:
+          - not_null
+
+      - name: customer_id
+        description: Foreign key to customer
+        tests:
+          - not_null
+          - relationships:
+              to: ref('slvr_customers')
+              field: customer_id
+
+      - name: product_id
+        description: Foreign key to product
+        tests:
+          - not_null
+          - relationships:
+              to: ref('slvr_products')
+              field: product_id
+
+      - name: order_date
+        description: Order date
+        tests:
+          - not_null
+
+      - name: order_year
+        description: Year extracted from order_date
+
+      - name: order_quarter
+        description: Quarter (1-4)
+
+      - name: fiscal_year
+        description: Fiscal year (starts July 1)
+
+      - name: fiscal_quarter
+        description: Fiscal quarter (1-4)
+
+      - name: order_channel_detail
+        description: Detailed channel (Direct Online, Assisted Online, Sales Person, Walk-in)
+
+      - name: line_total
+        description: Line item revenue
+        tests:
+          - not_null
+
+      - name: gross_amount
+        description: Revenue before discount
+
+      - name: discount_amount
+        description: Total discount in dollars
+
+      - name: line_item_value_category
+        description: High Value, Medium Value, Low Value, Minimal Value
+
+      - name: discount_strategy
+        description: No Discount, Minimal, Standard, High, Clearance
+
+      - name: order_value_tier
+        description: Enterprise, High Value, Medium Value, Standard
+
+      - name: shipping_performance
+        description: Not Shipped, On Time, Late
+
+      - name: shipping_speed_category
+        description: Same Day, Next Day, Express, Standard, Slow
+
+      - name: order_size_category
+        description: Bulk, Large, Medium, Small Order
+
+      - name: has_data_quality_issue
+        description: Flag for potential data issues (0/1)
+
+      - name: is_cancelled
+        description: Order cancelled flag (0/1)
+
+      - name: is_completed
+        description: Order completed flag (0/1)
+
+      - name: product_rank_in_order
+        description: Product rank by revenue within order
+
+      - name: percentage_of_order_total
+        description: Line item as % of total order
+
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - sales_order_id
+            - order_detail_id
+
+  # ===========================================================================
+  # SILVER: Customers (Enriched)
+  # ===========================================================================
+  - name: slvr_customers
+    description: |
+      ## Silver Layer: Enriched Customers
+
+      **Purpose:** Customer master data enriched with purchase history,
+      behavioral analysis, and RFM segmentation.
+
+      **Grain:** One row per customer
+
+      **Key Enhancements:**
+      - Lifetime value and purchase metrics
+      - RFM segmentation (Recency, Frequency, Monetary)
+      - Customer segments (VIP, Champion, Loyal, At Risk, Lost, etc.)
+      - Channel preference analysis
+      - Discount behavior patterns
+
+      **Segmentation Logic:**
+      - VIP: Active (≤90 days) + Frequent (>10 orders) + High value (≥$20k)
+      - Champion: Active (≤30 days) + Regular (≥5 orders) + Good value (≥$5k)
+      - Loyal: Regular orders (≥5) + Good value (≥$5k)
+      - At Risk: Lapsed (91-180 days) + Previously active (≥3 orders)
+      - Lost: Dormant (>180 days) + Previously active (≥3 orders)
+
+      **Downstream Usage:** Customer analytics, marketing campaigns
+
+    columns:
+      - name: customer_id
+        description: Primary key
+        tests:
+          - not_null
+          - unique
+
+      - name: account_number
+        description: Customer account number
+        tests:
+          - not_null
+
+      - name: full_name
+        description: Complete customer name
+
+      - name: customer_type
+        description: Business or Individual
+
+      - name: total_orders
+        description: Lifetime order count
+        tests:
+          - not_null
+
+      - name: lifetime_value
+        description: Total revenue from customer
+        tests:
+          - not_null
+
+      - name: avg_order_value
+        description: Average order value
+
+      - name: unique_products_purchased
+        description: Count of distinct products purchased
+
+      - name: first_order_date
+        description: Date of first purchase
+
+      - name: last_order_date
+        description: Date of most recent purchase
+
+      - name: days_since_last_order
+        description: Recency metric (days)
+
+      - name: customer_age_months
+        description: Months since first purchase
+
+      - name: orders_per_month
+        description: Purchase frequency metric
+
+      - name: channel_preference
+        description: Online Preferred, Offline Preferred, Omnichannel
+
+      - name: order_completion_rate
+        description: Percentage of completed orders
+
+      - name: recency_segment
+        description: Active, Recent, Lapsed, Dormant, Never Purchased
+
+      - name: frequency_segment
+        description: Frequent, Regular, Occasional, One-time, No Orders
+
+      - name: monetary_segment
+        description: VIP, High Value, Medium Value, Low Value, No Value
+
+      - name: customer_segment
+        description: |
+          Primary segment: VIP, Champion, Loyal, Potential Loyalist,
+          New Customer, At Risk, Lost, Hibernating, Prospect
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                [
+                  "VIP",
+                  "Champion",
+                  "Loyal",
+                  "Potential Loyalist",
+                  "New Customer",
+                  "At Risk",
+                  "Lost",
+                  "Hibernating",
+                  "Prospect",
+                  "Other",
+                ]
+
+      - name: discount_usage_pattern
+        description: Never, Rarely, Sometimes, Frequently Discounted
+
+  # ===========================================================================
+  # SILVER: Products (Enriched)
+  # ===========================================================================
+  - name: slvr_products
+    description: |
+      ## Silver Layer: Enriched Products
+
+      **Purpose:** Product catalog enriched with sales performance,
+      profitability analysis, and lifecycle management.
+
+      **Grain:** One row per product
+
+      **Key Enhancements:**
+      - Sales performance metrics (orders, revenue, units sold)
+      - Pricing analysis (average selling price, variance, discounts)
+      - Profitability calculations (actual profit, margins)
+      - Product classification (popularity, revenue tiers)
+      - Lifecycle stage (New Launch, Growing, Mature, Dormant, etc.)
+      - Inventory intelligence (Fast/Slow moving, Dead stock)
+
+      **Downstream Usage:** Product analytics, inventory optimization
+
+    columns:
+      - name: product_id
+        description: Primary key
+        tests:
+          - not_null
+          - unique
+
+      - name: product_name
+        description: Product name
+        tests:
+          - not_null
+
+      - name: product_number
+        description: Product identifier
+        tests:
+          - not_null
+
+      - name: category_name
+        description: Product category
+
+      - name: subcategory_name
+        description: Product subcategory
+
+      - name: list_price
+        description: Standard selling price
+        tests:
+          - not_null
+
+      - name: standard_cost
+        description: Cost basis
+
+      - name: profit_margin_percentage
+        description: Standard profit margin %
+
+      - name: product_status
+        description: Active, Discontinued, Ended, Not Yet Available
+
+      - name: total_orders
+        description: Lifetime order count
+
+      - name: unique_customers
+        description: Count of distinct customers
+
+      - name: total_units_sold
+        description: Lifetime units sold
+
+      - name: total_revenue
+        description: Lifetime revenue generated
+
+      - name: avg_selling_price
+        description: Actual average selling price
+
+      - name: avg_price_variance_percentage
+        description: Price variance from list price (%)
+
+      - name: discount_frequency_percentage
+        description: percent of sales that were discounted
+
+      - name: discount_pattern
+        description: Never, Rarely, Sometimes, Frequently Discounted
+
+      - name: units_per_day
+        description: Sales velocity metric
+
+      - name: revenue_per_day
+        description: Revenue velocity metric
+
+      - name: popularity_tier
+        description: Best Seller, Popular, Moderate, Low Demand, No Sales
+        tests:
+          - accepted_values:
+              values:
+                ["Best Seller", "Popular", "Moderate", "Low Demand", "No Sales"]
+
+      - name: revenue_tier
+        description: Top Revenue, High, Medium, Low, No Revenue
+
+      - name: value_mix_classification
+        description: Premium Product, Volume Product, Balanced Product
+
+      - name: total_profit
+        description: Total profit generated
+
+      - name: actual_profit_margin_percentage
+        description: Actual profit margin based on sales
+
+      - name: customer_reach
+        description: Wide Reach, Moderate Reach, Limited Reach, No Reach
+
+      - name: orders_per_customer
+        description: Repeat purchase rate
+
+      - name: lifecycle_stage
+        description: |
+          New Launch, Growing, Mature, Dormant, End of Life,
+          Discontinued, Never Sold
+
+      - name: inventory_movement_category
+        description: Fast Moving, Normal, Slow Moving, Dead Stock, Obsolete
+        tests:
+          - accepted_values:
+              values:
+                [
+                  "Fast Moving",
+                  "Normal",
+                  "Slow Moving",
+                  "Dead Stock",
+                  "Obsolete",
+                ]

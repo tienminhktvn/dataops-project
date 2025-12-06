@@ -1,0 +1,302 @@
+version: 2
+
+models:
+  # ===========================================================================
+  # BRONZE: Sales Orders
+  # ===========================================================================
+  - name: brnz_sales_orders
+    description: |
+      ## Bronze Layer: Sales Orders
+
+      **Purpose:** Denormalized view combining SalesOrderHeader and SalesOrderDetail.
+
+      **Data Source:** AdventureWorks2014.Sales schema
+
+      **Grain:** One row per order line item (sales_order_id + order_detail_id)
+
+      **Transformations Applied:**
+      - Join header + detail tables
+      - Standardize column names to snake_case
+      - Add calculated fields (days_to_ship, discount_percentage)
+      - Add human-readable status descriptions
+      - Filter out invalid data (qty <= 0)
+
+      **Downstream Usage:**
+      - Silver layer: slvr_sales_orders (business logic)
+      - Gold layer: Sales analytics and metrics
+
+      **Refresh Frequency:** Real-time (materialized as view)
+
+    columns:
+      # -----------------------------------------------------------------------
+      # Primary Keys
+      # -----------------------------------------------------------------------
+      - name: sales_order_id
+        description: Unique identifier for sales order (from header)
+        tests:
+          - not_null
+
+      - name: order_detail_id
+        description: Line item number within the order
+        tests:
+          - not_null
+
+      # -----------------------------------------------------------------------
+      # Order Identifiers
+      # -----------------------------------------------------------------------
+      - name: sales_order_number
+        description: Human-readable order number (e.g., SO43659)
+
+      - name: purchase_order_number
+        description: Customer's purchase order number (optional)
+
+      # -----------------------------------------------------------------------
+      # Date Columns
+      # -----------------------------------------------------------------------
+      - name: order_date
+        description: Date when order was placed
+        tests:
+          - not_null
+
+      - name: due_date
+        description: Date when order is due to be delivered
+
+      - name: ship_date
+        description: Date when order was actually shipped
+
+      - name: days_to_ship
+        description: Calculated field - days between order and ship date
+
+      # -----------------------------------------------------------------------
+      # Status Columns
+      # -----------------------------------------------------------------------
+      - name: status
+        description: Order status code (1-6)
+        tests:
+          - accepted_values:
+              values: [1, 2, 3, 4, 5, 6]
+
+      - name: status_description
+        description: Human-readable status (In process, Shipped, etc.)
+
+      - name: online_order_flag
+        description: 0=Offline, 1=Online
+
+      - name: order_channel
+        description: Human-readable channel (Online/Offline)
+
+      # -----------------------------------------------------------------------
+      # Foreign Keys
+      # -----------------------------------------------------------------------
+      - name: customer_id
+        description: Foreign key to Customer
+        tests:
+          - not_null
+
+      - name: sales_person_id
+        description: Foreign key to SalesPerson (null for online orders)
+
+      - name: territory_id
+        description: Foreign key to SalesTerritory
+
+      - name: product_id
+        description: Foreign key to Product
+        tests:
+          - not_null
+
+      # -----------------------------------------------------------------------
+      # Product Line Item Columns
+      # -----------------------------------------------------------------------
+      - name: order_qty
+        description: Quantity ordered
+        tests:
+          - not_null
+
+      - name: unit_price
+        description: Selling price per unit
+        tests:
+          - not_null
+
+      - name: unit_price_discount
+        description: Discount amount per unit (dollars)
+
+      - name: line_total
+        description: Line item total (unit_price * qty * (1 - discount))
+        tests:
+          - not_null
+
+      - name: discount_percentage
+        description: Calculated discount as percentage
+
+      - name: is_discounted
+        description: Flag indicating if line has discount (0/1)
+
+      # -----------------------------------------------------------------------
+      # Order Totals
+      # -----------------------------------------------------------------------
+      - name: order_subtotal
+        description: Order subtotal before tax and shipping
+
+      - name: order_tax_amount
+        description: Tax amount for entire order
+
+      - name: order_freight
+        description: Shipping cost for entire order
+
+      - name: order_total_due
+        description: Total amount due (subtotal + tax + freight)
+
+      # -----------------------------------------------------------------------
+      # Metadata
+      # -----------------------------------------------------------------------
+      - name: dbt_loaded_at
+        description: Timestamp when record was processed by DBT
+
+    # Model-level tests
+    tests:
+      # Test that combination of sales_order_id + order_detail_id is unique
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - sales_order_id
+            - order_detail_id
+
+  # ===========================================================================
+  # BRONZE: Customers
+  # ===========================================================================
+  - name: brnz_customers
+    description: |
+      ## Bronze Layer: Customers
+
+      **Purpose:** Combined customer and person information.
+
+      **Data Source:** AdventureWorks2014.Sales.Customer + Person.Person
+
+      **Grain:** One row per customer
+
+      **Transformations Applied:**
+      - Join Customer + Person tables
+      - Construct full name from name components
+      - Add customer type classification (Business/Individual)
+      - Add person type descriptions
+
+      **Downstream Usage:**
+      - Silver layer: Customer enrichment and segmentation
+      - Gold layer: Customer analytics
+
+      **Refresh Frequency:** Daily (master data changes infrequently)
+
+    columns:
+      - name: customer_id
+        description: Primary key for customer
+        tests:
+          - not_null
+          - unique
+
+      - name: account_number
+        description: Unique customer account number
+        tests:
+          - not_null
+
+      - name: person_id
+        description: Foreign key to Person (for individual customers)
+
+      - name: store_id
+        description: Foreign key to Store (for business customers)
+
+      - name: person_type
+        description: Type code (SC, IN, SP, EM, VC, GC)
+
+      - name: person_type_description
+        description: Human-readable person type
+
+      - name: full_name
+        description: Constructed full name (title first middle last suffix)
+
+      - name: first_name
+        description: First name
+
+      - name: last_name
+        description: Last name
+
+      - name: customer_type
+        description: Business or Individual classification
+
+      - name: dbt_loaded_at
+        description: DBT processing timestamp
+
+  # ===========================================================================
+  # BRONZE: Products
+  # ===========================================================================
+  - name: brnz_products
+    description: |
+      ## Bronze Layer: Products
+
+      **Purpose:** Complete product catalog with category hierarchy.
+
+      **Data Source:** AdventureWorks2014.Production schema
+
+      **Grain:** One row per product
+
+      **Transformations Applied:**
+      - Join Product + ProductSubcategory + ProductCategory
+      - Calculate profit margins
+      - Add product status (Active/Discontinued/etc.)
+      - Calculate days on market
+
+      **Downstream Usage:**
+      - Silver layer: Product enrichment
+      - Gold layer: Product performance metrics
+
+      **Refresh Frequency:** Daily (product catalog changes infrequently)
+
+    columns:
+      - name: product_id
+        description: Primary key for product
+        tests:
+          - not_null
+          - unique
+
+      - name: product_number
+        description: Unique product identification number
+        tests:
+          - not_null
+
+      - name: product_name
+        description: Product name
+        tests:
+          - not_null
+
+      - name: category_name
+        description: Product category (Bikes, Clothing, etc.)
+
+      - name: subcategory_name
+        description: Product subcategory
+
+      - name: color
+        description: Product color
+
+      - name: size
+        description: Product size
+
+      - name: list_price
+        description: Selling price
+        tests:
+          - not_null
+
+      - name: standard_cost
+        description: Cost to manufacture or acquire
+
+      - name: profit_margin
+        description: Calculated profit (list_price - standard_cost)
+
+      - name: profit_margin_percentage
+        description: Profit margin as percentage of list price
+
+      - name: product_status
+        description: Active, Discontinued, Ended, or Not Yet Available
+
+      - name: days_on_market
+        description: Number of days product has been available for sale
+
+      - name: dbt_loaded_at
+        description: DBT processing timestamp

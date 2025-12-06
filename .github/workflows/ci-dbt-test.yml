@@ -1,0 +1,171 @@
+# =============================================================================
+# CI WORKFLOW: DBT Testing
+# =============================================================================
+name: CI - DBT Test
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths: [dbt/**, .github/workflows/ci-dbt-test.yml]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# -----------------------------------------------------------------------------
+# GLOBAL ENV
+# -----------------------------------------------------------------------------
+env:
+  DBT_PROFILES_DIR: ./dbt
+  SQL_SERVER_HOST: localhost
+  SQL_SERVER_PORT: 1433
+  SQL_DATABASE: tempdb
+  SQL_USER: sa
+  SQL_PASSWORD: YourStrong@Passw0rd
+
+jobs:
+  # ===========================================================================
+  # DBT Parse (Syntax)
+  # ===========================================================================
+  dbt-parse:
+    name: DBT Parse (Syntax)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      - name: Install DBT
+        run: |
+          pip install dbt-core==1.8.7 dbt-sqlserver==1.8.7
+          dbt --version
+
+      - name: Install DBT packages
+        run: dbt deps --project-dir dbt
+
+      - name: DBT Parse
+        run: |
+          echo "🔍 Parsing DBT project..."
+          dbt parse --project-dir dbt --target ci
+
+  # ===========================================================================
+  # DBT Integration Tests
+  # ===========================================================================
+  dbt-integration-test:
+    name: DBT Integration Tests
+    runs-on: ubuntu-22.04
+    needs: [dbt-parse]
+
+    # -------------------------------------------------------------------------
+    # SERVICE: SQL Server
+    # -------------------------------------------------------------------------
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2019-latest
+        ports: [1433:1433]
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: YourStrong@Passw0rd
+          MSSQL_PID: Express
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      # -----------------------------------------------------------------------
+      # Wait for Database to Start
+      # -----------------------------------------------------------------------
+      - name: Wait for SQL Server
+        run: |
+          echo "⏳ Waiting 30 seconds for SQL Server to warm up..."
+          sleep 30
+
+      - name: Install System Dependencies (ODBC)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unixodbc-dev
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc
+          curl https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql17
+
+      - name: Install DBT
+        run: |
+          pip install --upgrade pip
+          pip install dbt-core==1.8.7 dbt-sqlserver==1.8.7
+
+      - name: Install DBT packages
+        run: dbt deps --project-dir dbt
+
+      # -----------------------------------------------------------------------
+      # Run Checks (USING TARGET: CI)
+      # -----------------------------------------------------------------------
+      - name: DBT Debug (Check Connection)
+        run: dbt debug --project-dir dbt --target ci
+
+      - name: DBT Compile (Syntax Check)
+        run: |
+          echo "🔍 Compiling DBT models..."
+          dbt compile --project-dir dbt --target ci
+          echo "✅ Compilation successful"
+
+      - name: Check for circular dependencies
+        run: |
+          echo "🔄 Checking for circular dependencies..."
+          if dbt compile --project-dir dbt --target ci 2>&1 | grep -i "circular"; then
+            echo "❌ Circular dependency detected!"
+            exit 1
+          fi
+
+      - name: Generate Documentation
+        run: dbt docs generate --project-dir dbt --target ci
+
+      # -----------------------------------------------------------------------
+      # Upload Artifacts
+      # -----------------------------------------------------------------------
+      - name: Upload compiled artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-compiled-artifacts
+          path: dbt/target/compiled/
+          retention-days: 7
+
+      - name: Upload DBT Documentation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-docs
+          path: |
+            dbt/target/index.html
+            dbt/target/manifest.json
+            dbt/target/catalog.json
+          retention-days: 7
+
+  # ===========================================================================
+  # Test Summary
+  # ===========================================================================
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-22.04
+    needs: [dbt-parse, dbt-integration-test]
+    if: always()
+    steps:
+      - name: Generate Summary
+        run: |-
+          echo "# 🧪 DBT CI Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| DBT Parse | ${{ needs.dbt-parse.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration Tests | ${{ needs.dbt-integration-test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
