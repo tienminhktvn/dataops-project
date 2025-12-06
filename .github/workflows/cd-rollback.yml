@@ -51,6 +51,7 @@ jobs:
       - name: Validate rollback target
         id: validate
         run: |
+          docker run --rm -v $(pwd):/workspace alpine chown -R $(id -u):$(id -g) /workspace || true
           TARGET_SHA="${{ steps.determine-sha.outputs.target_sha }}"
           if ! git cat-file -e "$TARGET_SHA^{commit}" 2>/dev/null; then
             echo "❌ Invalid commit SHA: $TARGET_SHA"
