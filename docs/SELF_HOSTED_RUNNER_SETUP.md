@@ -108,7 +108,7 @@ rm actions-runner-linux-x64-2.311.0.tar.gz
 
 ### 3.3 Get Runner Token from GitHub
 
-1. Go to your GitHub repository: `https://github.com/ngocnhan2k4/dataops-project`
+1. Go to your GitHub repository: `https://github.com/<YOUR_USERNAME>/dataops-project`
 2. Navigate to: **Settings** → **Actions** → **Runners** → **New self-hosted runner**
 3. Select **Linux** as the operating system
 4. Copy the configuration command (it includes your unique token)
@@ -117,11 +117,11 @@ rm actions-runner-linux-x64-2.311.0.tar.gz
 
 ```bash
 # Run the configuration script with your token
-./config.sh --url https://github.com/ngocnhan2k4/dataops-project --token YOUR_TOKEN_HERE
+./config.sh --url https://github.com/<YOUR_USERNAME>/dataops-project --token YOUR_TOKEN_HERE
 
 # When prompted:
-# - Enter runner name: dataops-prod-runner (or your preferred name)
 # - Enter runner group: Default (press Enter)
+# - Enter runner name: self-hosted
 # - Enter labels: self-hosted,Linux,X64 (press Enter for defaults)
 # - Enter work folder: _work (press Enter for default)
 ```
@@ -151,7 +151,7 @@ sudo ./svc.sh start
 sudo ./svc.sh status
 
 # Enable auto-start on boot
-sudo systemctl enable actions.runner.ngocnhan2k4-dataops-project.dataops-prod-runner.service
+sudo systemctl enable actions.runner.<YOUR_USENAME>-dataops-project.dataops-prod-runner.service
 ```
 
 ### Service Management Commands
@@ -184,43 +184,6 @@ cd dataops-project
 # Set proper permissions
 chmod +x sqlserver/entrypoint.sh sqlserver/restore_db.sh
 ```
-
-## 🧪 Step 6: Test the Deployment
-
-### Manual Test (Before Using GitHub Actions)
-
-```bash
-# Ensure you're in the project directory
-cd ~/workspace/dataops-project
-
-# Start the containers
-docker-compose up -d --build
-
-# Wait for services to be ready
-sleep 30
-
-# Check container status
-docker ps
-
-# Test dbt commands
-docker exec dataops-dbt dbt deps
-docker exec dataops-dbt dbt run --target dev
-docker exec dataops-dbt dbt test --target dev
-
-# View logs if needed
-docker logs dataops-dbt
-docker logs dataops-airflow
-docker logs dataops-sqlserver
-```
-
-### Trigger GitHub Actions Deployment
-
-1. Go to your repository on GitHub
-2. Navigate to **Actions** tab
-3. Select "CD - Deploy Pipeline (Self-Hosted)"
-4. Click **Run workflow**
-5. Choose environment (dev/prod)
-6. Monitor the deployment
 
 ## 🔒 Security Best Practices
 
@@ -332,22 +295,6 @@ sudo journalctl -u actions.runner.* -n 100
 sudo journalctl -u actions.runner.* --since today
 ```
 
-### Monitor Docker Resources
-
-```bash
-# Container stats
-docker stats
-
-# Disk usage
-docker system df
-
-# View all containers
-docker ps -a
-
-# View networks
-docker network ls
-```
-
 ## 🔄 Maintenance
 
 ### Update Runner
@@ -365,19 +312,6 @@ tar xzf ./actions-runner-linux-x64-latest.tar.gz
 
 # Restart service
 sudo ./svc.sh start
-```
-
-### Clean Up Old Docker Images
-
-```bash
-# Remove unused images
-docker image prune -a
-
-# Remove unused volumes
-docker volume prune
-
-# Full cleanup (be careful!)
-docker system prune -a --volumes
 ```
 
 ## 📝 Configuration Files Location
@@ -407,14 +341,6 @@ If you encounter issues:
 1. Check the troubleshooting section above
 2. Review GitHub Actions logs in the **Actions** tab
 3. Check runner logs: `sudo journalctl -u actions.runner.* -f`
-4. Verify Docker containers: `docker ps` and `docker logs <container>`
-
-## 🔗 Useful Resources
-
-- [GitHub Actions Self-Hosted Runners Documentation](https://docs.github.com/en/actions/hosting-your-own-runners)
-- [Docker Documentation](https://docs.docker.com/)
-- [DBT Documentation](https://docs.getdbt.com/)
-- [Apache Airflow Documentation](https://airflow.apache.org/)
 
 ---
 
