@@ -1,7 +1,7 @@
 # =============================================================================
-# CD WORKFLOW: Deployment (Self-Hosted Server)
+# CD WORKFLOW: Deployment
 # =============================================================================
-name: CD - Deploy Pipeline (Self-Hosted)
+name: CD - Deploy Pipeline
 
 on:
   push:
@@ -12,7 +12,7 @@ on:
       - dbt/**
       - airflow/**
       - docker-compose.yaml
-      - .github/workflows/cd-deploy-self-hosted.yml
+      - .github/workflows/cd-deploy.yml
   workflow_dispatch:
     inputs:
       environment:
@@ -54,7 +54,7 @@ jobs:
           echo "🎯 Deployment Goal: $ENV Environment"
 
   # ===========================================================================
-  # Deploy (Update Containers & Run DBT)
+  # Deploy
   # ===========================================================================
   deploy-and-test:
     name: Deploy & Validate
@@ -70,7 +70,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
         with:
-          clean: false # Don't wipe the whole directory, just update code
+          clean: false
 
       - name: Create Backup Metadata
         if: needs.determine-env.outputs.env_name == 'prod'
@@ -79,26 +79,27 @@ jobs:
           echo "Backup for commit ${{ github.sha }}" > backup/deploy_meta_${{ github.sha }}.txt
 
       # -----------------------------------------------------------------------
-      # Update Infrastructure (Docker)
+      # Update Infrastructure
       # -----------------------------------------------------------------------
       - name: Restart Containers
         run: |
+          mkdir -p airflow/logs airflow/plugins airflow/dags
+
+          docker run --rm \
+            -v $PWD/airflow:/opt/airflow \
+            alpine sh -c "chown -R 50000:0 /opt/airflow/logs /opt/airflow/plugins /opt/airflow/dags || chmod -R 777 /opt/airflow/logs /opt/airflow/plugins /opt/airflow/dags"
+
           echo "🔄 Rebuilding and restarting containers..."
           docker compose up -d --build
 
       - name: Wait for Health
         run: |
-          echo "⏳ Waiting 30s for services to stabilize..."
-          sleep 30
+          echo "⏳ Waiting 40s for services to stabilize..."
+          sleep 40
 
       # -----------------------------------------------------------------------
-      # Execute Pipeline (Inside the Container)
+      # Execute Pipeline
       # -----------------------------------------------------------------------
-      - name: Install Dependencies
-        run: |
-          echo "📦 Installing DBT deps inside container..."
-          docker exec dataops-dbt dbt deps
-
       - name: Run Models
         run: |
           echo "🚀 Running DBT Models (Target: $TARGET)..."
@@ -109,13 +110,8 @@ jobs:
           echo "🧪 Running Tests..."
           docker exec dataops-dbt dbt test --target $TARGET
 
-      - name: Generate Documentation
-        run: |
-          echo "📚 Generating Docs..."
-          docker exec dataops-dbt dbt docs generate --target $TARGET
-
       # -----------------------------------------------------------------------
-      # Artifact Collection (Extract from Container)
+      # Artifact Collection
       # -----------------------------------------------------------------------
       - name: Extract Artifacts
         if: always()
@@ -141,14 +137,102 @@ jobs:
     needs: [determine-env, deploy-and-test]
     if: always()
     steps:
-      - name: Generate Report
+      - name: Send Slack Notification
+        if: always()
+        run: |
+          # Define Status Variables
+          STATUS="${{ needs.deploy-and-test.result }}"
+          ENV="${{ needs.determine-env.outputs.env_name }}"
+          REPO="${{ github.repository }}"
+          COMMIT_SHA="${{ github.sha }}"
+          SHORT_SHA=$(echo $COMMIT_SHA | cut -c1-7)
+          RUN_ID="${{ github.run_id }}"
+          ACTOR="${{ github.actor }}"
+
+          # Set Colors and Titles based on success/failure
+          if [ "$STATUS" == "success" ]; then
+            COLOR="#2EB67D"  # Green
+            HEADER="🚀 Deployment Successful"
+            MSG="The data pipeline has been successfully deployed and verified."
+          else
+            COLOR="#FF0000"  # Red
+            HEADER="🚨 Deployment Failed"
+            MSG="The deployment encountered errors. Please check the logs immediately."
+          fi
+
+          # Construct JSON Payload
+          PAYLOAD=$(cat <<EOF
+          {
+            "attachments": [
+              {
+                "color": "$COLOR",
+                "blocks": [
+                  {
+                    "type": "header",
+                    "text": {
+                      "type": "plain_text",
+                      "text": "$HEADER",
+                      "emoji": true
+                    }
+                  },
+                  {
+                    "type": "section",
+                    "text": {
+                      "type": "mrkdwn",
+                      "text": "$MSG"
+                    }
+                  },
+                  {
+                    "type": "section",
+                    "fields": [
+                      {
+                        "type": "mrkdwn",
+                        "text": "*Environment:*\n$ENV"
+                      },
+                      {
+                        "type": "mrkdwn",
+                        "text": "*Status:*\n$STATUS"
+                      },
+                      {
+                        "type": "mrkdwn",
+                        "text": "*Deployer:*\n$ACTOR"
+                      },
+                      {
+                        "type": "mrkdwn",
+                        "text": "*Commit:*\n<https://github.com/$REPO/commit/$COMMIT_SHA|$SHORT_SHA>"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "actions",
+                    "elements": [
+                      {
+                        "type": "button",
+                        "text": {
+                          "type": "plain_text",
+                          "text": "View Action Logs"
+                        },
+                        "style": "primary",
+                        "url": "https://github.com/$REPO/actions/runs/$RUN_ID"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+          )
+
+          curl -X POST -H 'Content-type: application/json' --data "$PAYLOAD" ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Generate GitHub Summary
         run: |
           if [ "${{ needs.deploy-and-test.result }}" == "success" ]; then
             echo "# ✅ Deployment Successful" >> $GITHUB_STEP_SUMMARY
             echo "Deployed to **${{ needs.determine-env.outputs.env_name }}**" >> $GITHUB_STEP_SUMMARY
-            echo "All dbt models built and tests passed." >> $GITHUB_STEP_SUMMARY
           else
             echo "# ❌ Deployment Failed" >> $GITHUB_STEP_SUMMARY
-            echo "Please check the artifacts for error logs." >> $GITHUB_STEP_SUMMARY
+            echo "Check Slack or Logs for details." >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
