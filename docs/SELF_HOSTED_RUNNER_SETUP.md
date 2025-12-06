@@ -84,6 +84,8 @@ docker-compose --version
 ```bash
 # Create a dedicated user for the runner
 sudo useradd -m -s /bin/bash github-runner
+sudo passwd -d github-runner
+sudo usermod -aG sudo github-runner
 sudo usermod -aG docker github-runner
 
 # Switch to runner user
