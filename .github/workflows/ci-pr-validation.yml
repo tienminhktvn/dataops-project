@@ -31,11 +31,8 @@ jobs:
             perf
             config
           requireScope: false
-          subjectPattern: ^[A-Z].+$
-          subjectPatternError: |
-            The subject "{subject}" found in the pull request title "{title}"
-            must start with a capital letter.
         continue-on-error: true
+
       - name: Validate title length
         run: |
           TITLE="${{ github.event.pull_request.title }}"
