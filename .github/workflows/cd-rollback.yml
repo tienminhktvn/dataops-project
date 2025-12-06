@@ -78,6 +78,11 @@ jobs:
           ref: ${{ needs.validate-rollback.outputs.target_sha }}
           clean: false
 
+      - name: Create .env file with Secret
+        env:
+          WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: echo "SLACK_WEBHOOK_URL=$WEBHOOK_URL" >> .env
+
       - name: Restart Containers
         run: |
           echo "🔄 Rebuilding containers with OLD code..."

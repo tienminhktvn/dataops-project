@@ -78,6 +78,11 @@ jobs:
           mkdir -p backup
           echo "Backup for commit ${{ github.sha }}" > backup/deploy_meta_${{ github.sha }}.txt
 
+      - name: Create .env file with Secret
+        env:
+          WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: echo "SLACK_WEBHOOK_URL=$WEBHOOK_URL" >> .env
+
       # -----------------------------------------------------------------------
       # Update Infrastructure
       # -----------------------------------------------------------------------
