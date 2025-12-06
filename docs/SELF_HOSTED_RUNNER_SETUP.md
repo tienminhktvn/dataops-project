@@ -58,10 +58,6 @@ sudo usermod -aG docker $USER
 
 # Apply group changes (or logout and login again)
 newgrp docker
-
-# Verify Docker installation
-docker --version
-docker run hello-world
 ```
 
 ### Install Docker Compose
