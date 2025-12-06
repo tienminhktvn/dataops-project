@@ -1,5 +1,5 @@
 # =============================================================================
-# CD WORKFLOW: Rollback Deployment (Self-Hosted)
+# CD WORKFLOW: Rollback Deployment
 # =============================================================================
 
 name: CD - Rollback Deployment
@@ -31,6 +31,10 @@ jobs:
       target_sha: ${{ steps.determine-sha.outputs.target_sha }}
       can_rollback: ${{ steps.validate.outputs.can_rollback }}
     steps:
+      - name: Fix Permissions
+        run: |
+          docker run --rm -v $(pwd):/workspace alpine chown -R $(id -u):$(id -g) /workspace || true
+
       - name: Checkout code
         uses: actions/checkout@v3
         with:
@@ -42,7 +46,6 @@ jobs:
           if [ -n "${{ github.event.inputs.backup_sha }}" ]; then
             TARGET_SHA="${{ github.event.inputs.backup_sha }}"
           else
-            # Get the commit BEFORE the current HEAD (HEAD~1)
             TARGET_SHA=$(git rev-parse HEAD~1)
           fi
           echo "target_sha=$TARGET_SHA" >> $GITHUB_OUTPUT
@@ -51,7 +54,6 @@ jobs:
       - name: Validate rollback target
         id: validate
         run: |
-          docker run --rm -v $(pwd):/workspace alpine chown -R $(id -u):$(id -g) /workspace || true
           TARGET_SHA="${{ steps.determine-sha.outputs.target_sha }}"
           if ! git cat-file -e "$TARGET_SHA^{commit}" 2>/dev/null; then
             echo "❌ Invalid commit SHA: $TARGET_SHA"
@@ -70,14 +72,12 @@ jobs:
     needs: [validate-rollback]
     if: needs.validate-rollback.outputs.can_rollback == 'true'
     steps:
-      # 1. Checkout the OLD code
       - name: Checkout target commit
         uses: actions/checkout@v3
         with:
           ref: ${{ needs.validate-rollback.outputs.target_sha }}
           clean: false
 
-      # Update Infrastructure
       - name: Restart Containers
         run: |
           echo "🔄 Rebuilding containers with OLD code..."
@@ -88,7 +88,6 @@ jobs:
           echo "⏳ Waiting 30s for services..."
           sleep 30
 
-      # 3. Run Pipeline
       - name: Install Dependencies
         run: docker exec dataops-dbt dbt deps
 
@@ -96,7 +95,6 @@ jobs:
         run: |
           echo "🔄 Deploying rolled-back version..."
           TARGET="${{ github.event.inputs.environment }}"
-          # Use --full-refresh to ensure old schema is restored
           docker exec dataops-dbt dbt run --target $TARGET --full-refresh
 
       - name: Run Verification Tests
@@ -106,7 +104,7 @@ jobs:
           docker exec dataops-dbt dbt test --target $TARGET
 
   # ===========================================================================
-  # Notify Team
+  # Notify Team (Fixed Curl Command)
   # ===========================================================================
   notify-rollback:
     name: Notify Rollback
@@ -121,14 +119,77 @@ jobs:
             COLOR="#FF8C00" # Orange (Warning - it is a rollback)
             HEADER="🔄 Rollback Executed Successfully"
             STATUS="Success"
+            MSG="The environment has been rolled back to a previous stable state."
           else
             COLOR="#FF0000" # Red
             HEADER="🚨 Rollback Failed"
             STATUS="Failed"
+            MSG="The rollback attempt failed. System status is unknown."
           fi
 
           ENV="${{ github.event.inputs.environment }}"
           TARGET_SHA="${{ needs.validate-rollback.outputs.target_sha }}"
           REASON="${{ github.event.inputs.reason }}"
           ACTOR="${{ github.actor }}"
+          REPO="${{ github.repository }}"
+          RUN_ID="${{ github.run_id }}"
           SHORT_SHA=$(echo $TARGET_SHA | cut -c1-7)
+
+          # Construct Payload
+          PAYLOAD=$(cat <<EOF
+          {
+            "attachments": [
+              {
+                "color": "$COLOR",
+                "blocks": [
+                  {
+                    "type": "header",
+                    "text": {
+                      "type": "plain_text",
+                      "text": "$HEADER",
+                      "emoji": true
+                    }
+                  },
+                  {
+                    "type": "section",
+                    "text": {
+                      "type": "mrkdwn",
+                      "text": "$MSG"
+                    }
+                  },
+                  {
+                    "type": "section",
+                    "fields": [
+                      {"type": "mrkdwn", "text": "*Environment:*\n$ENV"},
+                      {"type": "mrkdwn", "text": "*Status:*\n$STATUS"},
+                      {"type": "mrkdwn", "text": "*Restored Commit:*\n$SHORT_SHA"},
+                      {"type": "mrkdwn", "text": "*Executed By:*\n$ACTOR"}
+                    ]
+                  },
+                  {
+                    "type": "section",
+                    "text": {
+                      "type": "mrkdwn",
+                      "text": "*Reason for Rollback:*\n$REASON"
+                    }
+                  },
+                  {
+                    "type": "actions",
+                    "elements": [
+                      {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "View Rollback Logs"},
+                        "style": "danger",
+                        "url": "https://github.com/$REPO/actions/runs/$RUN_ID"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+          )
+
+          # Send Request
+          curl -X POST -H 'Content-type: application/json' --data "$PAYLOAD" ${{ secrets.SLACK_WEBHOOK_URL }}
