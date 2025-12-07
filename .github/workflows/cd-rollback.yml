@@ -104,6 +104,7 @@ jobs:
         run: |
           echo "🔄 Deploying rolled-back version..."
           TARGET="${{ github.event.inputs.environment }}"
+          # Use --full-refresh to ensure old schema is restored
           docker exec dataops-dbt dbt run --target $TARGET --full-refresh
 
       - name: Run Verification Tests
