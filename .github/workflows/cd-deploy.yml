@@ -83,11 +83,15 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Restart Containers
         run: |
+          echo "🛑 Stopping containers to release file locks..."
+          docker compose down || true
+
+          echo "🔧 Fixing permissions..."
           mkdir -p airflow/logs airflow/plugins airflow/dags
 
           docker run --rm \
             -v $PWD/airflow:/opt/airflow \
-            alpine sh -c "chown -R 50000:0 /opt/airflow/logs /opt/airflow/plugins /opt/airflow/dags || chmod -R 777 /opt/airflow/logs /opt/airflow/plugins /opt/airflow/dags"
+            alpine sh -c "chmod -R 777 /opt/airflow/logs /opt/airflow/plugins /opt/airflow/dags"
 
           echo "🔄 Rebuilding and restarting containers..."
           docker compose up -d --build
