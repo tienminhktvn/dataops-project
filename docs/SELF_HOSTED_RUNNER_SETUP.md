@@ -94,11 +94,6 @@ sudo su - github-runner
 # Create a directory for the runner
 mkdir -p ~/actions-runner && cd ~/actions-runner
 
-mkdir -p ~/actions-runner/_work/dataops-project/dataops-project
-
-# Setup SLACK_WEBHOOK_URL
-echo "SLACK_WEBHOOK_URL=<YOUR_SLACK_WEBHOOK_URL>" >> .env
-
 # Download the latest runner package
 curl -o actions-runner-linux-x64-2.311.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.311.0/actions-runner-linux-x64-2.311.0.tar.gz
 

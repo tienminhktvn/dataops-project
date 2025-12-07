@@ -1,5 +1,5 @@
 # =============================================================================
-# CD WORKFLOW: Rollback Deployment
+# CD WORKFLOW: Rollback Deployment (Self-Hosted)
 # =============================================================================
 
 name: CD - Rollback Deployment
@@ -22,7 +22,7 @@ on:
 
 jobs:
   # ===========================================================================
-  # Validate Rollback Request
+  # 1. Validate Rollback Request
   # ===========================================================================
   validate-rollback:
     name: Validate Rollback
@@ -31,10 +31,6 @@ jobs:
       target_sha: ${{ steps.determine-sha.outputs.target_sha }}
       can_rollback: ${{ steps.validate.outputs.can_rollback }}
     steps:
-      - name: Fix Permissions
-        run: |
-          docker run --rm -v $(pwd):/workspace alpine chown -R $(id -u):$(id -g) /workspace || true
-
       - name: Checkout code
         uses: actions/checkout@v3
         with:
@@ -46,6 +42,7 @@ jobs:
           if [ -n "${{ github.event.inputs.backup_sha }}" ]; then
             TARGET_SHA="${{ github.event.inputs.backup_sha }}"
           else
+            # Get the commit BEFORE the current HEAD
             TARGET_SHA=$(git rev-parse HEAD~1)
           fi
           echo "target_sha=$TARGET_SHA" >> $GITHUB_OUTPUT
@@ -64,7 +61,7 @@ jobs:
           echo "can_rollback=true" >> $GITHUB_OUTPUT
 
   # ===========================================================================
-  # Execute Rollback (Update Containers & Run DBT)
+  # 2. Execute Rollback (Update Containers & Run DBT)
   # ===========================================================================
   execute-rollback:
     name: Execute Rollback
@@ -78,13 +75,25 @@ jobs:
           ref: ${{ needs.validate-rollback.outputs.target_sha }}
           clean: false
 
+      # Inject Secret for Airflow containers
       - name: Create .env file with Secret
         env:
           WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: echo "SLACK_WEBHOOK_URL=$WEBHOOK_URL" >> .env
+        run: |
+          echo "SLACK_WEBHOOK_URL=$WEBHOOK_URL" >> .env
 
       - name: Restart Containers
         run: |
+          echo "🛑 Stopping containers to release file locks..."
+          docker compose down || true
+
+          echo "🔧 Fixing permissions..."
+          mkdir -p airflow/logs airflow/plugins airflow/dags
+
+          docker run --rm \
+            -v $PWD/airflow:/opt/airflow \
+            alpine sh -c "chmod -R 777 /opt/airflow/logs /opt/airflow/plugins /opt/airflow/dags"
+
           echo "🔄 Rebuilding containers with OLD code..."
           docker compose up -d --build
 
@@ -100,6 +109,7 @@ jobs:
         run: |
           echo "🔄 Deploying rolled-back version..."
           TARGET="${{ github.event.inputs.environment }}"
+          # Use --full-refresh to ensure old schema is restored
           docker exec dataops-dbt dbt run --target $TARGET --full-refresh
 
       - name: Run Verification Tests
@@ -109,7 +119,7 @@ jobs:
           docker exec dataops-dbt dbt test --target $TARGET
 
   # ===========================================================================
-  # Notify Team (Fixed Curl Command)
+  # 3. Notify Team
   # ===========================================================================
   notify-rollback:
     name: Notify Rollback
@@ -119,7 +129,7 @@ jobs:
     steps:
       - name: Send Slack Notification
         run: |
-          # Define Variables
+          # 1. Define Variables
           if [ "${{ needs.execute-rollback.result }}" == "success" ]; then
             COLOR="#FF8C00" # Orange (Warning - it is a rollback)
             HEADER="🔄 Rollback Executed Successfully"
@@ -140,7 +150,7 @@ jobs:
           RUN_ID="${{ github.run_id }}"
           SHORT_SHA=$(echo $TARGET_SHA | cut -c1-7)
 
-          # Construct Payload
+          # 2. Construct Payload
           PAYLOAD=$(cat <<EOF
           {
             "attachments": [
@@ -196,5 +206,5 @@ jobs:
           EOF
           )
 
-          # Send Request
+          # 3. Send Request
           curl -X POST -H 'Content-type: application/json' --data "$PAYLOAD" ${{ secrets.SLACK_WEBHOOK_URL }}

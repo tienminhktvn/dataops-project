@@ -78,21 +78,20 @@ jobs:
           mkdir -p backup
           echo "Backup for commit ${{ github.sha }}" > backup/deploy_meta_${{ github.sha }}.txt
 
-      - name: Create .env file with Secret
-        env:
-          WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: echo "SLACK_WEBHOOK_URL=$WEBHOOK_URL" >> .env
-
       # -----------------------------------------------------------------------
       # Update Infrastructure
       # -----------------------------------------------------------------------
       - name: Restart Containers
         run: |
+          echo "🛑 Stopping containers to release file locks..."
+          docker compose down || true
+
+          echo "🔧 Fixing permissions..."
           mkdir -p airflow/logs airflow/plugins airflow/dags
 
           docker run --rm \
             -v $PWD/airflow:/opt/airflow \
-            alpine sh -c "chown -R 50000:0 /opt/airflow/logs /opt/airflow/plugins /opt/airflow/dags || chmod -R 777 /opt/airflow/logs /opt/airflow/plugins /opt/airflow/dags"
+            alpine sh -c "chmod -R 777 /opt/airflow/logs /opt/airflow/plugins /opt/airflow/dags"
 
           echo "🔄 Rebuilding and restarting containers..."
           docker compose up -d --build
@@ -136,34 +135,36 @@ jobs:
   # ===========================================================================
   # Notification
   # ===========================================================================
-  notify-rollback:
-    name: Notify Rollback
+  notify:
+    name: Final Status
     runs-on: self-hosted
-    needs: [validate-rollback, execute-rollback]
+    needs: [determine-env, deploy-and-test]
     if: always()
     steps:
       - name: Send Slack Notification
+        if: always()
         run: |
-          if [ "${{ needs.execute-rollback.result }}" == "success" ]; then
-            COLOR="#FF8C00" # Orange (Warning - it is a rollback)
-            HEADER="🔄 Rollback Executed Successfully"
-            STATUS="Success"
-            MSG="The environment has been rolled back to a previous stable state."
+          # Define Status Variables
+          STATUS="${{ needs.deploy-and-test.result }}"
+          ENV="${{ needs.determine-env.outputs.env_name }}"
+          REPO="${{ github.repository }}"
+          COMMIT_SHA="${{ github.sha }}"
+          SHORT_SHA=$(echo $COMMIT_SHA | cut -c1-7)
+          RUN_ID="${{ github.run_id }}"
+          ACTOR="${{ github.actor }}"
+
+          # Set Colors and Titles based on success/failure
+          if [ "$STATUS" == "success" ]; then
+            COLOR="#2EB67D"  # Green
+            HEADER="🚀 Deployment Successful"
+            MSG="The data pipeline has been successfully deployed and verified."
           else
-            COLOR="#FF0000" # Red
-            HEADER="🚨 Rollback Failed"
-            STATUS="Failed"
-            MSG="The rollback attempt failed. System status is unknown."
+            COLOR="#FF0000"  # Red
+            HEADER="🚨 Deployment Failed"
+            MSG="The deployment encountered errors. Please check the logs immediately."
           fi
 
-          ENV="${{ github.event.inputs.environment }}"
-          TARGET_SHA="${{ needs.validate-rollback.outputs.target_sha }}"
-          REASON="${{ github.event.inputs.reason }}"
-          ACTOR="${{ github.actor }}"
-          REPO="${{ github.repository }}"
-          RUN_ID="${{ github.run_id }}"
-          SHORT_SHA=$(echo $TARGET_SHA | cut -c1-7)
-
+          # Construct JSON Payload
           PAYLOAD=$(cat <<EOF
           {
             "attachments": [
@@ -188,26 +189,34 @@ jobs:
                   {
                     "type": "section",
                     "fields": [
-                      {"type": "mrkdwn", "text": "*Environment:*\n$ENV"},
-                      {"type": "mrkdwn", "text": "*Status:*\n$STATUS"},
-                      {"type": "mrkdwn", "text": "*Restored Commit:*\n$SHORT_SHA"},
-                      {"type": "mrkdwn", "text": "*Executed By:*\n$ACTOR"}
+                      {
+                        "type": "mrkdwn",
+                        "text": "*Environment:*\n$ENV"
+                      },
+                      {
+                        "type": "mrkdwn",
+                        "text": "*Status:*\n$STATUS"
+                      },
+                      {
+                        "type": "mrkdwn",
+                        "text": "*Deployer:*\n$ACTOR"
+                      },
+                      {
+                        "type": "mrkdwn",
+                        "text": "*Commit:*\n<https://github.com/$REPO/commit/$COMMIT_SHA|$SHORT_SHA>"
+                      }
                     ]
-                  },
-                  {
-                    "type": "section",
-                    "text": {
-                      "type": "mrkdwn",
-                      "text": "*Reason for Rollback:*\n$REASON"
-                    }
                   },
                   {
                     "type": "actions",
                     "elements": [
                       {
                         "type": "button",
-                        "text": {"type": "plain_text", "text": "View Rollback Logs"},
-                        "style": "danger",
+                        "text": {
+                          "type": "plain_text",
+                          "text": "View Action Logs"
+                        },
+                        "style": "primary",
                         "url": "https://github.com/$REPO/actions/runs/$RUN_ID"
                       }
                     ]
