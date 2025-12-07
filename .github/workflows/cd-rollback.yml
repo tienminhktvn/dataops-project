@@ -85,6 +85,10 @@ jobs:
 
       - name: Restart Containers
         run: |
+          docker run --rm \
+            -v $PWD/airflow:/opt/airflow \
+            alpine sh -c "chown -R 50000:0 /opt/airflow/logs /opt/airflow/plugins /opt/airflow/dags || chmod -R 777 /opt/airflow/logs /opt/airflow/plugins /opt/airflow/dags"
+
           echo "🔄 Rebuilding containers with OLD code..."
           docker compose up -d --build
 
