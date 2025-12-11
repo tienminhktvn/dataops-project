@@ -458,7 +458,7 @@ docker exec dataops-airflow-webserver airflow dags list-runs -d dbt_transform
 
 - ✅ **README.md** (2 points): Complete setup guide
 - ✅ **Architecture Documentation** (3 points):
-  - [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System design
+  - [ARCHITECTURE_DIAGRAM.md](docs/ARCHITECTURE_DIAGRAM.md) - System design
   - [CI_CD_GUIDE.md](docs/CI_CD_GUIDE.md) - Pipeline documentation
   - [FILE_STRUCTURE.md](docs/FILE_STRUCTURE.md) - Project organization
 
