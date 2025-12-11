@@ -33,35 +33,35 @@
 │                     Docker Compose Environment                            │
 ├───────────────────────────────────────────────────────────────────────────┤
 │                                                                           │
-│  ┌─────────────┐    ┌──────────────┐    ┌──────────────┐                │
-│  │ SQL Server  │───▶│     DBT      │───▶│   Schemas:   │                │
-│  │ (Source DB) │    │ (Transform)  │    │   - Bronze   │                │
-│  │ AW2014      │    │  Bronze →    │    │   - Silver   │                │
-│  │             │    │  Silver →    │    │   - Gold     │                │
-│  │ Port: 1433  │    │  Gold        │    │              │                │
-│  └─────────────┘    └──────┬───────┘    └──────────────┘                │
-│                             │                                            │
-│                             ▼                                            │
-│                    ┌────────────────┐                                    │
-│                    │    Airflow     │                                    │
-│                    │ (Orchestrator) │                                    │
-│                    ├────────────────┤                                    │
-│                    │   Webserver    │◀─── Port: 8080                     │
-│                    │   Scheduler    │     (Admin UI)                     │
-│                    └────────┬───────┘                                    │
-│                             │                                            │
-│                             ▼                                            │
-│                    ┌────────────────┐                                    │
-│                    │   PostgreSQL   │                                    │
-│                    │   (Metadata)   │                                    │
-│                    │  Port: 5432    │                                    │
-│                    └────────────────┘                                    │
+│  ┌─────────────┐    ┌──────────────┐    ┌──────────────┐                  │
+│  │ SQL Server  │───▶│     DBT      │───▶│   Schemas:   │                 │
+│  │ (Source DB) │    │ (Transform)  │    │   - Bronze   │                  │
+│  │ AW2014      │    │  Bronze →    │    │   - Silver   │                  │
+│  │             │    │  Silver →    │    │   - Gold     │                  │
+│  │ Port: 1433  │    │  Gold        │    │              │                  │
+│  └─────────────┘    └──────┬───────┘    └──────────────┘                  │
+│                             │                                             │
+│                             ▼                                             │
+│                    ┌────────────────┐                                     │
+│                    │    Airflow     │                                     │
+│                    │ (Orchestrator) │                                     │
+│                    ├────────────────┤                                     │
+│                    │   Webserver    │◀─── Port: 8080                      │
+│                    │   Scheduler    │     (Admin UI)                      │
+│                    └────────┬───────┘                                     │
+│                             │                                             │
+│                             ▼                                             │
+│                    ┌────────────────┐                                     │
+│                    │   PostgreSQL   │                                     │
+│                    │   (Metadata)   │                                     │
+│                    │  Port: 5432    │                                     │
+│                    └────────────────┘                                     │
 │                                                                           │
-│  ┌─────────────────────────────────────────────┐                         │
-│  │      CloudBeaver (Optional)                 │                         │
-│  │      SQL Server Web UI                      │                         │
-│  │      Port: 8978                             │                         │
-│  └─────────────────────────────────────────────┘                         │
+│  ┌─────────────────────────────────────────────┐                          │
+│  │      CloudBeaver (Optional)                 │                          │
+│  │      SQL Server Web UI                      │                          │
+│  │      Port: 8978                             │                          │
+│  └─────────────────────────────────────────────┘                          │
 │                                                                           │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
@@ -77,41 +77,41 @@
 │              Docker Compose - dataops_network                  │
 ├────────────────────────────────────────────────────────────────┤
 │                                                                │
-│  ┌───────────────┐        ┌────────────────┐                  │
-│  │  SQL Server   │        │  PostgreSQL    │                  │
-│  │  dataops-     │        │  dataops-      │                  │
-│  │  sqlserver    │        │  postgres      │                  │
-│  │  Port: 1433   │        │  Port: 5432    │                  │
-│  └───────┬───────┘        └────────┬───────┘                  │
+│  ┌───────────────┐        ┌────────────────┐                   │
+│  │  SQL Server   │        │  PostgreSQL    │                   │
+│  │  dataops-     │        │  dataops-      │                   │
+│  │  sqlserver    │        │  postgres      │                   │
+│  │  Port: 1433   │        │  Port: 5432    │                   │
+│  └───────┬───────┘        └────────┬───────┘                   │
 │          │                         │                           │
 │          │                         │                           │
-│  ┌───────▼─────────────────────────▼───────┐                  │
-│  │         Airflow Webserver               │                  │
-│  │         dataops-airflow-webserver       │                  │
-│  │         Port: 8080                      │                  │
-│  └─────────────────┬───────────────────────┘                  │
+│  ┌───────▼─────────────────────────▼───────┐                   │
+│  │         Airflow Webserver               │                   │
+│  │         dataops-airflow-webserver       │                   │
+│  │         Port: 8080                      │                   │
+│  └─────────────────┬───────────────────────┘                   │
 │                    │                                           │
-│  ┌─────────────────▼───────────────────────┐                  │
-│  │         Airflow Scheduler               │                  │
-│  │         dataops-airflow-scheduler       │                  │
-│  └─────────────────┬───────────────────────┘                  │
+│  ┌─────────────────▼───────────────────────┐                   │
+│  │         Airflow Scheduler               │                   │
+│  │         dataops-airflow-scheduler       │                   │
+│  └─────────────────┬───────────────────────┘                   │
 │                    │                                           │
-│  ┌─────────────────▼───────────────────────┐                  │
-│  │         DBT Container                   │                  │
-│  │         dataops-dbt                     │                  │
-│  │         (Transformation Engine)         │                  │
-│  └──────────────────────────────────────────┘                 │
+│  ┌─────────────────▼───────────────────────┐                   │
+│  │         DBT Container                   │                   │
+│  │         dataops-dbt                     │                   │
+│  │         (Transformation Engine)         │                   │
+│  └──────────────────────────────────────────┘                  │
 │                                                                │
-│  ┌──────────────────────────────────────────┐                 │
-│  │         CloudBeaver                      │                 │
-│  │         cloudbeaver                      │                 │
-│  │         Port: 8978                       │                 │
-│  └──────────────────────────────────────────┘                 │
+│  ┌──────────────────────────────────────────┐                  │
+│  │         CloudBeaver                      │                  │
+│  │         cloudbeaver                      │                  │
+│  │         Port: 8978                       │                  │
+│  └──────────────────────────────────────────┘                  │
 │                                                                │
-│  Persistent Volumes:                                          │
-│  • sqlserver_data                                             │
-│  • postgres_data                                              │
-│  • cloudbeaver_data                                           │
+│  Persistent Volumes:                                           │
+│  • sqlserver_data                                              │
+│  • postgres_data                                               │
+│  • cloudbeaver_data                                            │
 │                                                                │
 └────────────────────────────────────────────────────────────────┘
 ```
@@ -135,7 +135,7 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│ STAGE 1: SOURCE DATA (SQL Server AdventureWorks2014)            │
+│ STAGE 1: SOURCE DATA (SQL Server AdventureWorks2014)             │
 ├──────────────────────────────────────────────────────────────────┤
 │ Tables:                                                          │
 │ • Sales.SalesOrderHeader                                         │
@@ -148,12 +148,12 @@
                          │
                          ▼ DBT Extract & Clean
 ┌──────────────────────────────────────────────────────────────────┐
-│ STAGE 2: BRONZE LAYER (Staging - Cleaned Raw Data)              │
+│ STAGE 2: BRONZE LAYER (Staging - Cleaned Raw Data)               │
 ├──────────────────────────────────────────────────────────────────┤
-│ Models: (Materialized as VIEWS)                                 │
-│ • brnz_sales_orders    - Denormalized sales data                │
-│ • brnz_customers       - Customer master data                   │
-│ • brnz_products        - Product master data                    │
+│ Models: (Materialized as VIEWS)                                  │
+│ • brnz_sales_orders    - Denormalized sales data                 │
+│ • brnz_customers       - Customer master data                    │
+│ • brnz_products        - Product master data                     │
 │                                                                  │
 │ Transformations:                                                 │
 │ • Column standardization (snake_case)                            │
@@ -164,12 +164,12 @@
                          │
                          ▼ DBT Business Logic
 ┌──────────────────────────────────────────────────────────────────┐
-│ STAGE 3: SILVER LAYER (Business Logic)                          │
+│ STAGE 3: SILVER LAYER (Business Logic)                           │
 ├──────────────────────────────────────────────────────────────────┤
-│ Models: (Materialized as TABLES)                                │
-│ • slvr_sales_orders    - Enriched orders with metrics           │
-│ • slvr_customers       - Customer lifetime value                │
-│ • slvr_products        - Product performance metrics            │
+│ Models: (Materialized as TABLES)                                 │
+│ • slvr_sales_orders    - Enriched orders with metrics            │
+│ • slvr_customers       - Customer lifetime value                 │
+│ • slvr_products        - Product performance metrics             │
 │                                                                  │
 │ Transformations:                                                 │
 │ • Join multiple bronze models                                    │
@@ -180,12 +180,12 @@
                          │
                          ▼ DBT Aggregations
 ┌──────────────────────────────────────────────────────────────────┐
-│ STAGE 4: GOLD LAYER (Analytics-Ready Marts)                     │
+│ STAGE 4: GOLD LAYER (Analytics-Ready Marts)                      │
 ├──────────────────────────────────────────────────────────────────┤
-│ Models: (Materialized as TABLES)                                │
-│ • gld_sales_summary       - Daily sales metrics                 │
-│ • gld_customer_metrics    - Customer segmentation               │
-│ • gld_product_performance - Product analytics                   │
+│ Models: (Materialized as TABLES)                                 │
+│ • gld_sales_summary       - Daily sales metrics                  │
+│ • gld_customer_metrics    - Customer segmentation                │
+│ • gld_product_performance - Product analytics                    │
 │                                                                  │
 │ Transformations:                                                 │
 │ • Time-based aggregations                                        │
@@ -279,19 +279,19 @@ Developer Push/PR
 │  CI PIPELINE (Pull Request)                                 │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────┐ │
-│  │  ci-dbt-test.yml │  │  ci-lint.yml     │  │  ci-pr-  │ │
-│  ├──────────────────┤  ├──────────────────┤  │ validation│ │
-│  │ • DBT parse      │  │ • SQL linting    │  │ .yml     │ │
-│  │ • Model compile  │  │ • Python linting │  │          │ │
-│  │ • Run tests      │  │ • YAML lint      │  │ • PR     │ │
-│  │ • Upload logs    │  │ • Code quality   │  │  title   │ │
-│  └──────────────────┘  └──────────────────┘  │ • File   │ │
-│                                               │  size    │ │
-│                                               │ • Label  │ │
-│                                               └──────────┘ │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────┐   │
+│  │  ci-dbt-test.yml │  │  ci-lint.yml     │  │  ci-pr-  │   │
+│  ├──────────────────┤  ├──────────────────┤  │ validation│  │
+│  │ • DBT parse      │  │ • SQL linting    │  │ .yml     │   │
+│  │ • Model compile  │  │ • Python linting │  │          │   │
+│  │ • Run tests      │  │ • YAML lint      │  │ • PR     │   │
+│  │ • Upload logs    │  │ • Code quality   │  │  title   │   │
+│  └──────────────────┘  └──────────────────┘  │ • File   │   │
+│                                               │  size    │  │
+│                                               │ • Label  │  │
+│                                               └──────────┘  │
 │                                                             │
-│  All CI checks must pass before merge                      │
+│  All CI checks must pass before merge                       │
 └─────────────────────────────────────────────────────────────┘
        │
        ▼ Merge to main/develop
@@ -299,20 +299,20 @@ Developer Push/PR
 │  CD PIPELINE (Deployment)                                   │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  ┌──────────────────┐         ┌──────────────────┐         │
-│  │  cd-deploy.yml   │         │ cd-rollback.yml  │         │
-│  ├──────────────────┤         ├──────────────────┤         │
-│  │ 1. Detect env    │         │ • Validate       │         │
-│  │ 2. Checkout code │         │  request         │         │
-│  │ 3. Build images  │         │ • Checkout SHA   │         │
-│  │ 4. Restart       │         │ • Deploy         │         │
-│  │    containers    │         │ • Verify         │         │
-│  │ 5. Run dbt deps  │         └──────────────────┘         │
-│  │ 6. Run dbt run   │               ▲                      │
-│  │ 7. Run dbt test  │               │                      │
-│  │ 8. Health check  │               │ (on failure)         │
-│  │ 9. Notify        │───────────────┘                      │
-│  └──────────────────┘                                      │
+│  ┌──────────────────┐         ┌──────────────────┐          │
+│  │  cd-deploy.yml   │         │ cd-rollback.yml  │          │
+│  ├──────────────────┤         ├──────────────────┤          │
+│  │ 1. Detect env    │         │ • Validate       │          │
+│  │ 2. Checkout code │         │  request         │          │
+│  │ 3. Build images  │         │ • Checkout SHA   │          │
+│  │ 4. Restart       │         │ • Deploy         │          │
+│  │    containers    │         │ • Verify         │          │
+│  │ 5. Run dbt deps  │         └──────────────────┘          │
+│  │ 6. Run dbt run   │               ▲                       │
+│  │ 7. Run dbt test  │               │                       │
+│  │ 8. Health check  │               │ (on failure)          │
+│  │ 9. Notify        │───────────────┘                       │
+│  └──────────────────┘                                       │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
        │
