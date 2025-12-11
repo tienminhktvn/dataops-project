@@ -14,9 +14,9 @@
 
 ## 📋 Tổng Quan Dự Án
 
-Dự án này triển khai một **DataOps pipeline hoàn chỉnh** theo chuẩn công nghiệp, áp dụng các nguyên tắc DevOps vào Data Engineering. Pipeline tự động hóa việc extract, transform, và load data từ SQL Server AdventureWorks2014, với kiến trúc Medallion (Bronze-Silver-Gold) và CI/CD automation.
+This project implements a complete DataOps pipeline following industry standards, applying DevOps principles to Data Engineering. The pipeline automates the extraction, transformation, and loading (ETL) of data from SQL Server AdventureWorks2014, utilizing the Medallion architecture (Bronze-Silver-Gold) and CI/CD automation.
 
-### 🎯 Công Nghệ Sử Dụng
+### 🎯 Tech Stack
 
 | Component            | Technology                  | Purpose                                 |
 | -------------------- | --------------------------- | --------------------------------------- |
@@ -29,7 +29,7 @@ Dự án này triển khai một **DataOps pipeline hoàn chỉnh** theo chuẩn
 | **CI/CD**            | GitHub Actions              | Automated testing và deployment         |
 | **Version Control**  | Git & GitHub                | Source code management                  |
 
-### 📊 Thống Kê Dự Án
+### 📊 Project Statistics
 
 | Metric                  | Value                                   |
 | ----------------------- | --------------------------------------- |
@@ -45,7 +45,7 @@ Dự án này triển khai một **DataOps pipeline hoàn chỉnh** theo chuẩn
 
 ---
 
-## 🏗️ Kiến Trúc Hệ Thống
+## 🏗️ System Architecture
 
 ### High-Level Architecture
 
@@ -176,7 +176,7 @@ Dự án này triển khai một **DataOps pipeline hoàn chỉnh** theo chuẩn
 
 #### 1. **SQL Server Container** (`dataops-sqlserver`)
 
-- **Purpose**: Chứa AdventureWorks2014 database - nguồn dữ liệu thô
+- **Purpose**: Chứa AdventureWorks2014 database - Raw data
 - **Port**: 1433
 - **Credentials**:
   - Username: `sa`
