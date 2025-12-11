@@ -12,7 +12,7 @@
 
 ---
 
-## 📋 Tổng Quan Dự Án
+## 📋 Project Overview
 
 This project implements a complete DataOps pipeline following industry standards, applying DevOps principles to Data Engineering. The pipeline automates the extraction, transformation, and loading (ETL) of data from SQL Server AdventureWorks2014, utilizing the Medallion architecture (Bronze-Silver-Gold) and CI/CD automation.
 
@@ -176,7 +176,7 @@ This project implements a complete DataOps pipeline following industry standards
 
 #### 1. **SQL Server Container** (`dataops-sqlserver`)
 
-- **Purpose**: Chứa AdventureWorks2014 database - Raw data
+- **Purpose**: Hosts the AdventureWorks2014 database (Raw Data).
 - **Port**: 1433
 - **Credentials**:
   - Username: `sa`
@@ -184,11 +184,11 @@ This project implements a complete DataOps pipeline following industry standards
 - **Database**: AdventureWorks2014
 - **Volume**: `sqlserver_data` - persistent storage cho database
 
-**Giải thích**: Container này chạy Microsoft SQL Server và chứa database AdventureWorks2014. Đây là nơi lưu trữ dữ liệu gốc (raw data) mà DBT sẽ extract và transform.
+**Explanation**: This container runs Microsoft SQL Server and contains the AdventureWorks2014 database. It serves as the source of raw data that DBT will extract and transform
 
 #### 2. **PostgreSQL Container** (`dataops-postgres`)
 
-- **Purpose**: Lưu trữ Airflow metadata (DAG runs, task status, logs)
+- **Purpose**: Stores Airflow metadata (DAG runs, task status, logs).
 - **Port**: 5432
 - **Credentials**:
   - Username: `airflow`
@@ -196,11 +196,11 @@ This project implements a complete DataOps pipeline following industry standards
   - Database: `airflow`
 - **Volume**: `postgres_data` - persistent storage cho metadata
 
-**Giải thích**: Airflow cần một database để lưu trữ thông tin về các DAGs, task executions, và logs. PostgreSQL được chọn vì performance và reliability tốt.
+**Explanation**: Airflow requires a backend database to store information about DAGs, task executions, and logs. PostgreSQL is chosen for its high performance and reliability.
 
 #### 3. **Airflow Webserver** (`dataops-airflow-webserver`)
 
-- **Purpose**: Cung cấp Web UI để monitor và manage DAGs
+- **Purpose**: Provides a Web UI to monitor and manage DAGs.
 - **Port**: 8080
 - **URL**: http://localhost:8080
 - **Credentials**:
@@ -211,7 +211,7 @@ This project implements a complete DataOps pipeline following industry standards
   - `./airflow/logs` → Execution logs
   - `./dbt` → DBT project files
 
-**Giải thích**: Web interface cho phép bạn xem, trigger, và monitor các DAGs. Đây là nơi bạn tương tác với Airflow pipeline.
+**Explanation**: The web interface allows you to view, trigger, and monitor DAGs. This is the primary entry point for interacting with the Airflow pipeline.
 
 #### 4. **Airflow Scheduler** (`dataops-airflow-scheduler`)
 
@@ -219,7 +219,7 @@ This project implements a complete DataOps pipeline following industry standards
 - **Executor**: LocalExecutor (chạy tasks locally)
 - **Volumes**: Shared với webserver
 
-**Giải thích**: Scheduler là trái tim của Airflow - nó liên tục check DAGs và trigger tasks khi đến schedule time hoặc khi dependencies được thỏa mãn.
+**Explanation**: The Scheduler continuously checks DAGs and triggers tasks when the schedule time arrives or dependencies are met.
 
 #### 5. **DBT Container** (`dataops-dbt`)
 
@@ -228,7 +228,7 @@ This project implements a complete DataOps pipeline following industry standards
 - **Volume**: `./dbt` → DBT project files
 - **Dependencies**: SQL Server ODBC Driver 17
 
-**Giải thích**: Container này chứa DBT và tất cả dependencies cần thiết để connect tới SQL Server và chạy transformations.
+**Explanation**: This container includes DBT and all necessary dependencies to connect to SQL Server and run transformations.
 
 #### 6. **Cloud Beaver Container** (`cloudbeaver`)
 
@@ -243,9 +243,9 @@ This project implements a complete DataOps pipeline following industry standards
 
 ### Network Architecture
 
-Tất cả containers được kết nối qua **`dataops_network`** (bridge network):
+All containers are connected via the dataops_network (bridge network):
 
-- Containers có thể giao tiếp với nhau bằng service name
+- Containers can communicate with each other using service names.
 - Example: DBT connect tới SQL Server qua hostname `sqlserver`
 
 ### Data Flow
