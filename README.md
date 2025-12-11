@@ -48,53 +48,17 @@ This project implements a complete DataOps pipeline following industry standards
 
 ### High-Level Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         DATAOPS PIPELINE ARCHITECTURE                   │
-└─────────────────────────────────────────────────────────────────────────┘
+![DataOps Architecture](images/Architecture.png)
 
-                    ┌──────────────────────┐
-                    │   GitHub Actions     │
-                    │   (CI/CD Pipeline)   │
-                    └──────────┬───────────┘
-                               │
-                               ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│                        Docker Compose Environment                        │
-├──────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  ┌─────────────┐    ┌──────────────┐    ┌────────────┐                   │
-│  │ SQL Server  │───▶│     DBT      │───▶│  Schemas: │                   │
-│  │ (Source DB) │    │ (Transform)  │    │  - Bronze  │                   │
-│  │ AW2014      │    │  Bronze →    │    │  - Silver  │                   │
-│  │             │    │  Silver →    │    │  - Gold    │                   │
-│  │ Port: 1433  │    │  Gold        │    │            │                   │
-│  └─────────────┘    └──────┬───────┘    └────────────┘                   │
-│                             │                                            │
-│                             ▼                                            │
-│                    ┌────────────────┐                                    │
-│                    │    Airflow     │                                    │
-│                    │ (Orchestrator) │                                    │
-│                    ├────────────────┤                                    │
-│                    │   Webserver    │◀─── Port: 8080                     │
-│                    │   Scheduler    │     (Admin UI)                      │
-│                    └────────┬───────┘                                     │
-│                             │                                             │
-│                             ▼                                             │
-│                    ┌────────────────┐                                     │
-│                    │   PostgreSQL   │                                     │
-│                    │   (Metadata)   │                                     │
-│                    │  Port: 5432    │                                     │
-│                    └────────────────┘                                     │
-│                                                                           │
-│  ┌─────────────────────────────────────────────────┐                      │
-│  │          CloudBeaver (Optional)                 │                      │
-│  │          SQL Server Web UI                      │                      │
-│  │          Port: 8978                             │                      │
-│  └─────────────────────────────────────────────────┘                      │
-│                                                                           │
-└───────────────────────────────────────────────────────────────────────────┘
-```
+**Architecture Overview:**
+
+- **GitHub Actions**: CI/CD automation with 5 workflows
+- **Docker Compose**: Orchestrates 6 containerized services
+- **SQL Server**: Source database (AdventureWorks2014)
+- **DBT**: Data transformation engine (Bronze → Silver → Gold)
+- **Airflow**: Workflow orchestration and scheduling
+- **PostgreSQL**: Airflow metadata storage
+- **CloudBeaver**: Optional web-based SQL management UI
 
 ### Data Flow
 

@@ -19,12 +19,12 @@
 
 ### Lineage Tracking Purpose
 
-Data lineage trong project này giúp:
+Data lineage in this project facilitates:
 
-- **Traceability**: Theo dõi nguồn gốc của mỗi field trong analytics
-- **Impact Analysis**: Hiểu tác động khi thay đổi source hoặc business logic
-- **Data Quality**: Debug và validate data transformation
-- **Compliance**: Đáp ứng yêu cầu về data governance
+- **Traceability**: Tracks the origin and provenance of each field in the analytics layer
+- **Impact Analysis**: Helps understand the downstream impact when source data or business logic changes
+- **Data Quality**: Assists in debugging and validating data transformations.
+- **Compliance**: Meets data governance and auditing requirements.
 
 ### Medallion Architecture
 

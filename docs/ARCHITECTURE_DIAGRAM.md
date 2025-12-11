@@ -18,6 +18,12 @@
 
 ### System Overview
 
+![DataOps Architecture](../images/Architecture.png)
+
+**Complete System Architecture** - Visual representation showing all components, data flows, and service interactions.
+
+### Detailed Text Diagram
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                        DATAOPS PIPELINE ARCHITECTURE                    │
