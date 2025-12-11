@@ -1,550 +1,724 @@
-# Data Lineage Visualization
+# 📊 Data Lineage Documentation
 
-## 🎯 BONUS FEATURE: Interactive Data Lineage (+5 points)
-
-This project includes comprehensive data lineage tracking using **DBT's built-in documentation** with enhanced visualization.
+> **Complete data lineage tracking from source to analytics-ready datasets**
 
 ---
 
-## What is Data Lineage?
+## 📋 Table of Contents
 
-Data lineage shows the **complete journey of data** from source to final analytics:
-
-- Where data comes from (sources)
-- How it's transformed (models)
-- Where it ends up (marts)
-- Dependencies between models
-- Column-level lineage
+1. [Overview](#overview)
+2. [Source to Bronze Lineage](#source-to-bronze-lineage)
+3. [Bronze to Silver Lineage](#bronze-to-silver-lineage)
+4. [Silver to Gold Lineage](#silver-to-gold-lineage)
+5. [Column-Level Lineage](#column-level-lineage)
+6. [Transformation Details](#transformation-details)
 
 ---
 
-## Lineage Levels
+## Overview
 
-### 1. **Table-Level Lineage**
+### Lineage Tracking Purpose
 
-Shows how tables flow through the pipeline:
+Data lineage trong project này giúp:
+
+- **Traceability**: Theo dõi nguồn gốc của mỗi field trong analytics
+- **Impact Analysis**: Hiểu tác động khi thay đổi source hoặc business logic
+- **Data Quality**: Debug và validate data transformation
+- **Compliance**: Đáp ứng yêu cầu về data governance
+
+### Medallion Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        SOURCE TABLES                             │
-└─────────────────────────────────────────────────────────────────┘
-                            │
-        ┌───────────────────┼───────────────────┐
-        ▼                   ▼                   ▼
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│SalesOrder    │    │   Customer   │    │   Product    │
-│  Header      │    │              │    │              │
-└──────────────┘    └──────────────┘    └──────────────┘
-        │                   │                   │
-        └───────────────────┼───────────────────┘
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                        BRONZE LAYER                              │
-│  (Staging - Data Cleaning & Standardization)                    │
-└─────────────────────────────────────────────────────────────────┘
-        │                   │                   │
-        ▼                   ▼                   ▼
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│ brnz_sales_  │    │ brnz_        │    │ brnz_        │
-│   orders     │    │ customers    │    │ products     │
-└──────────────┘    └──────────────┘    └──────────────┘
-        │                   │                   │
-        └───────────────────┼───────────────────┘
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                        SILVER LAYER                              │
-│  (Business Logic & Enrichment)                                   │
-└─────────────────────────────────────────────────────────────────┘
-        │                   │                   │
-        ▼                   ▼                   ▼
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│ slvr_sales_  │    │ slvr_        │    │ slvr_        │
-│   orders     │    │ customers    │    │ products     │
-└──────────────┘    └──────────────┘    └──────────────┘
-        │                   │                   │
-        └───────────────────┼───────────────────┘
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                         GOLD LAYER                               │
-│  (Analytics-Ready Business Marts)                                │
-└─────────────────────────────────────────────────────────────────┘
-        │                   │                   │
-        ▼                   ▼                   ▼
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│ gld_sales_   │    │ gld_customer_│    │ gld_product_ │
-│  summary     │    │   metrics    │    │ performance  │
-└──────────────┘    └──────────────┘    └──────────────┘
+Source (AdventureWorks2014)
+         │
+         ▼
+    BRONZE LAYER (Views)
+    - Data cleaning
+    - Standardization
+         │
+         ▼
+    SILVER LAYER (Tables)
+    - Business logic
+    - Data enrichment
+         │
+         ▼
+    GOLD LAYER (Tables)
+    - Aggregations
+    - Analytics-ready
 ```
 
 ---
 
-## Detailed Lineage by Model
+## Source to Bronze Lineage
 
-### Bronze Layer Lineage
+### 1. brnz_sales_orders
 
-#### brnz_sales_orders
+**Purpose**: Denormalized view of sales transactions
 
-```
-Sources:
-├── Sales.SalesOrderHeader
-│   └── Columns: SalesOrderID, OrderDate, CustomerID, SubTotal, etc.
-└── Sales.SalesOrderDetail
-    └── Columns: SalesOrderDetailID, ProductID, UnitPrice, LineTotal
+**Source Tables**:
 
-Transformations:
-├── Join: SalesOrderHeader LEFT JOIN SalesOrderDetail
-├── Column Renaming: snake_case standardization
-├── Calculated Fields:
-│   ├── days_to_ship = DATEDIFF(order_date, ship_date)
-│   ├── discount_percentage = (discount / unit_price) * 100
-│   └── order_channel = CASE online_order_flag...
+- `AdventureWorks2014.Sales.SalesOrderHeader`
+- `AdventureWorks2014.Sales.SalesOrderDetail`
 
-Output: brnz_sales_orders (VIEW)
-└── Used by: slvr_sales_orders
-```
-
-#### brnz_customers
-
-```
-Sources:
-├── Sales.Customer
-│   └── Columns: CustomerID, PersonID, TerritoryID
-└── Person.Person
-    └── Columns: FirstName, LastName, Title
-
-Transformations:
-├── Join: Customer LEFT JOIN Person
-├── Full Name Construction: CONCAT(title, first_name, last_name)
-└── Customer Type Classification
-
-Output: brnz_customers (VIEW)
-└── Used by: slvr_customers
-```
-
----
-
-### Silver Layer Lineage
-
-#### slvr_sales_orders
-
-```
-Sources:
-└── brnz_sales_orders
-
-Transformations:
-├── Date Intelligence:
-│   ├── Extract: year, quarter, month, day_of_week
-│   ├── Fiscal Year Calculation
-│   └── Business Day Flags
-├── Enrichment:
-│   ├── Order Value Tiers (Enterprise, High, Medium, Standard)
-│   ├── Shipping Performance (On Time, Late)
-│   ├── Discount Strategy Classification
-│   └── Data Quality Flags
-└── Window Functions:
-    ├── ROW_NUMBER() - Product rank in order
-    ├── SUM() OVER - Cumulative totals
-    └── Percentage calculations
-
-Output: slvr_sales_orders (TABLE)
-└── Used by:
-    ├── gld_sales_summary
-    ├── slvr_customers (for metrics)
-    └── slvr_products (for metrics)
-```
-
-#### slvr_customers
-
-```
-Sources:
-├── brnz_customers
-└── slvr_sales_orders (for purchase history)
-
-Transformations:
-├── Aggregations:
-│   ├── COUNT(orders), SUM(revenue), AVG(order_value)
-│   └── Date calculations (first/last order, tenure)
-├── RFM Segmentation:
-│   ├── Recency: Days since last order
-│   ├── Frequency: Order count
-│   └── Monetary: Lifetime value
-├── Customer Segments:
-│   ├── VIP, Champion, Loyal
-│   ├── At Risk, Lost, Hibernating
-│   └── New Customer, Prospect
-└── Behavioral Analysis:
-    ├── Channel preference
-    ├── Engagement score
-    └── Churn risk score
-
-Output: slvr_customers (TABLE)
-└── Used by: gld_customer_metrics
-```
-
----
-
-### Gold Layer Lineage
-
-#### gld_sales_summary
-
-```
-Sources:
-└── slvr_sales_orders
-
-Transformations:
-├── Daily Aggregation:
-│   ├── GROUP BY: order_date
-│   ├── Metrics: revenue, orders, customers, products
-│   └── Channel split: online vs offline
-├── Window Functions:
-│   ├── YTD Cumulative: SUM() OVER (PARTITION BY year)
-│   ├── Moving Averages: 7-day, 30-day
-│   └── Growth Rates: DoD, WoW
-└── KPIs:
-    ├── Discount penetration rate
-    ├── On-time delivery rate
-    └── Average order value
-
-Output: gld_sales_summary (TABLE)
-└── Used by: BI Dashboards, Executives
-```
-
----
-
-## Column-Level Lineage Example
-
-### Tracking `total_revenue` from Source to Gold
-
-```
-1. SOURCE: Sales.SalesOrderDetail
-   └── LineTotal (DECIMAL)
-       │
-       ▼
-2. BRONZE: brnz_sales_orders
-   └── line_total (renamed, same value)
-       │
-       ▼
-3. SILVER: slvr_sales_orders
-   └── line_total (with quality filters: > 0)
-       │
-       ▼
-4. GOLD: gld_sales_summary
-   └── total_revenue = SUM(line_total) GROUP BY order_date
-       │
-       ▼
-5. BI TOOL: Tableau Dashboard
-   └── "Daily Revenue" chart
-```
-
----
-
-## Accessing DBT Lineage Visualization
-
-### Method 1: DBT Docs (Built-in)
-
-```bash
-# 1. Generate documentation
-docker exec dataops-dbt dbt docs generate
-
-# 2. Serve documentation
-docker exec dataops-dbt dbt docs serve --port 8001
-
-# 3. Open browser
-http://localhost:8001
-```
-
-**Features:**
-
-- ✅ Interactive lineage graph
-- ✅ Click on model to see details
-- ✅ Zoom in/out
-- ✅ Search functionality
-- ✅ Column-level lineage
-- ✅ Source definitions
-- ✅ Test results
-
-### Method 2: Automated in CI/CD
-
-Our deployment workflow automatically generates docs:
-
-```yaml
-# .github/workflows/cd-deploy.yml
-generate_documentation:
-  steps:
-    - name: Generate DBT docs
-      run: dbt docs generate
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: dbt-docs
-        path: dbt/target/
-```
-
----
-
-## Lineage Visualization Features
-
-### 1. **DAG View**
-
-Shows the Directed Acyclic Graph of all models:
-
-```
-    sources         bronze          silver           gold
-       ●  ────────▶  ●  ────────▶  ●  ────────▶  ●
-       ●  ────────▶  ●  ────────▶  ●  ────────▶  ●
-       ●  ────────▶  ●  ────────▶  ●  ────────▶  ●
-```
-
-**Color Coding:**
-
-- 🟢 Green: Success
-- 🔴 Red: Failed tests
-- 🟡 Yellow: Warnings
-- ⚪ Gray: Not run
-
-### 2. **Model Details**
-
-Click any model to see:
-
-- SQL code
-- Description
-- Columns with data types
-- Tests applied
-- Dependencies (upstream/downstream)
-- Run results
-- Compilation time
-
-### 3. **Column Lineage**
-
-Click a column to trace it through the pipeline:
-
-```
-SalesOrderDetail.LineTotal
-  ↓
-brnz_sales_orders.line_total
-  ↓
-slvr_sales_orders.line_total
-  ↓
-gld_sales_summary.total_revenue (SUM aggregation)
-```
-
----
-
-## Lineage for Impact Analysis
-
-### Use Case: Schema Change Impact
-
-**Question:** If I change `SalesOrderDetail.LineTotal`, what breaks?
-
-**Answer from Lineage:**
-
-```
-SalesOrderDetail.LineTotal
-  ↓ IMPACTS ↓
-
-1. brnz_sales_orders
-   ├── Used in: line_total column
-   └── Downstream models: 1
-
-2. slvr_sales_orders
-   ├── Used in: line_total, gross_amount, discount_amount
-   └── Downstream models: 3
-
-3. gld_sales_summary
-   ├── Used in: total_revenue, avg_line_item_value
-   └── Downstream models: 0 (END)
-
-4. slvr_customers
-   ├── Used in: lifetime_value, avg_order_value
-   └── Downstream models: 1
-
-5. gld_customer_metrics
-   ├── Used in: lifetime_value
-   └── Downstream models: 0 (END)
-
-6. slvr_products
-   ├── Used in: total_revenue
-   └── Downstream models: 1
-
-7. gld_product_performance
-   ├── Used in: total_revenue
-   └── Downstream models: 0 (END)
-
-TOTAL IMPACT: 7 models affected
-```
-
----
-
-## Lineage Metadata
-
-### Stored in DBT Artifacts
-
-```json
-// dbt/target/manifest.json
-{
-  "nodes": {
-    "model.dataops_project.gld_sales_summary": {
-      "name": "gld_sales_summary",
-      "depends_on": {
-        "nodes": ["model.dataops_project.slvr_sales_orders"]
-      },
-      "columns": {
-        "total_revenue": {
-          "name": "total_revenue",
-          "description": "Sum of line_total...",
-          "data_type": "DECIMAL(18,2)"
-        }
-      }
-    }
-  }
-}
-```
-
----
-
-## Custom Lineage Queries
-
-### Query to Find All Dependencies
+**Transformation Logic**:
 
 ```sql
--- Using DBT metadata tables (if available)
+-- Join header and detail tables
 SELECT
-    parent.name as upstream_model,
-    child.name as downstream_model,
-    child.materialized as materialization,
-    child.schema as target_schema
-FROM {{ ref('dbt_models') }} parent
-JOIN {{ ref('dbt_model_dependencies') }} dep
-    ON parent.id = dep.parent_id
-JOIN {{ ref('dbt_models') }} child
-    ON dep.child_id = child.id
-WHERE parent.name = 'slvr_sales_orders'
-ORDER BY child.name
+    soh.SalesOrderID as sales_order_id,
+    soh.OrderDate as order_date,
+    sod.SalesOrderDetailID as order_detail_id,
+    sod.ProductID as product_id,
+    sod.OrderQty as quantity,
+    sod.UnitPrice as unit_price,
+    sod.LineTotal as line_total,
+    -- Calculated fields
+    DATEDIFF(day, soh.OrderDate, soh.ShipDate) as days_to_ship,
+    (sod.UnitPriceDiscount * 100) as discount_percentage
+FROM Sales.SalesOrderHeader soh
+INNER JOIN Sales.SalesOrderDetail sod
+    ON soh.SalesOrderID = sod.SalesOrderID
+WHERE sod.OrderQty > 0  -- Filter invalid data
+```
+
+**Key Transformations**:
+
+- ✅ Column name standardization (PascalCase → snake_case)
+- ✅ Join header and detail for denormalization
+- ✅ Add calculated fields (days_to_ship, discount_percentage)
+- ✅ Filter invalid records (OrderQty > 0)
+- ✅ Data type conversions
+
+**Row Count**: ~121,317 rows (one row per order line item)
+
+---
+
+### 2. brnz_customers
+
+**Purpose**: Customer master data with person information
+
+**Source Tables**:
+
+- `AdventureWorks2014.Sales.Customer`
+- `AdventureWorks2014.Person.Person`
+
+**Transformation Logic**:
+
+```sql
+SELECT
+    c.CustomerID as customer_id,
+    c.AccountNumber as account_number,
+    p.FirstName as first_name,
+    p.MiddleName as middle_name,
+    p.LastName as last_name,
+    -- Concatenated full name
+    CONCAT(p.FirstName, ' ', p.LastName) as full_name,
+    p.EmailPromotion as email_promotion,
+    c.ModifiedDate as modified_date
+FROM Sales.Customer c
+INNER JOIN Person.Person p
+    ON c.PersonID = p.BusinessEntityID
+WHERE p.FirstName IS NOT NULL
+```
+
+**Key Transformations**:
+
+- ✅ Join customer and person tables
+- ✅ Create full_name from first + last names
+- ✅ Standardize column names
+- ✅ Filter records with valid names
+
+**Row Count**: ~19,820 customers
+
+---
+
+### 3. brnz_products
+
+**Purpose**: Product master data with category information
+
+**Source Tables**:
+
+- `AdventureWorks2014.Production.Product`
+- `AdventureWorks2014.Production.ProductCategory`
+- `AdventureWorks2014.Production.ProductSubcategory`
+
+**Transformation Logic**:
+
+```sql
+SELECT
+    p.ProductID as product_id,
+    p.Name as product_name,
+    p.ProductNumber as product_number,
+    psc.Name as subcategory_name,
+    pc.Name as category_name,
+    p.ListPrice as list_price,
+    p.StandardCost as standard_cost,
+    -- Calculated fields
+    (p.ListPrice - p.StandardCost) as profit_margin,
+    CASE
+        WHEN p.ListPrice > 1000 THEN 'Premium'
+        WHEN p.ListPrice > 100 THEN 'Standard'
+        ELSE 'Budget'
+    END as price_tier
+FROM Production.Product p
+LEFT JOIN Production.ProductSubcategory psc
+    ON p.ProductSubcategoryID = psc.ProductSubcategoryID
+LEFT JOIN Production.ProductCategory pc
+    ON psc.ProductCategoryID = pc.ProductCategoryID
+WHERE p.ListPrice > 0
+```
+
+**Key Transformations**:
+
+- ✅ Join product, subcategory, and category tables
+- ✅ Calculate profit_margin
+- ✅ Add price_tier categorization
+- ✅ Filter products with valid prices
+
+**Row Count**: ~504 products
+
+---
+
+## Bronze to Silver Lineage
+
+### 1. slvr_sales_orders
+
+**Purpose**: Enriched sales data with business metrics
+
+**Source Models**:
+
+- `bronze.brnz_sales_orders` (primary)
+- `bronze.brnz_customers` (for customer info)
+- `bronze.brnz_products` (for product info)
+
+**Key Business Logic**:
+
+```sql
+WITH order_enriched AS (
+    SELECT
+        bso.*,
+        bc.full_name as customer_name,
+        bc.account_number,
+        bp.product_name,
+        bp.category_name,
+        -- Revenue calculations
+        bso.line_total as revenue,
+        bso.line_total * bp.profit_margin as estimated_profit,
+        -- Time intelligence
+        DATEPART(year, bso.order_date) as order_year,
+        DATEPART(quarter, bso.order_date) as order_quarter,
+        DATEPART(month, bso.order_date) as order_month,
+        DATENAME(weekday, bso.order_date) as order_weekday,
+        -- Categorization
+        CASE
+            WHEN bso.line_total >= 1000 THEN 'High Value'
+            WHEN bso.line_total >= 100 THEN 'Medium Value'
+            ELSE 'Low Value'
+        END as order_value_category
+    FROM {{ ref('brnz_sales_orders') }} bso
+    LEFT JOIN {{ ref('brnz_customers') }} bc
+        ON bso.customer_id = bc.customer_id
+    LEFT JOIN {{ ref('brnz_products') }} bp
+        ON bso.product_id = bp.product_id
+)
+SELECT * FROM order_enriched
+```
+
+**Transformations Applied**:
+
+- ✅ Join with customers and products for enrichment
+- ✅ Calculate estimated profit
+- ✅ Add time intelligence fields (year, quarter, month, weekday)
+- ✅ Categorize order value
+- ✅ Preserve all bronze fields + add new calculated fields
+
+**Row Count**: ~121,317 rows (same as bronze, enriched)
+
+---
+
+### 2. slvr_customers
+
+**Purpose**: Customer analytics with RFM segmentation
+
+**Source Models**:
+
+- `bronze.brnz_customers` (customer master)
+- `bronze.brnz_sales_orders` (for transaction history)
+
+**Key Business Logic**:
+
+```sql
+WITH customer_metrics AS (
+    SELECT
+        bc.customer_id,
+        bc.full_name,
+        bc.account_number,
+        -- RFM Metrics
+        MAX(bso.order_date) as last_order_date,
+        DATEDIFF(day, MAX(bso.order_date), GETDATE()) as recency_days,
+        COUNT(DISTINCT bso.sales_order_id) as frequency_orders,
+        SUM(bso.line_total) as monetary_total,
+        -- Additional metrics
+        AVG(bso.line_total) as avg_order_value,
+        MIN(bso.order_date) as first_order_date,
+        DATEDIFF(day, MIN(bso.order_date), MAX(bso.order_date)) as customer_lifetime_days
+    FROM {{ ref('brnz_customers') }} bc
+    LEFT JOIN {{ ref('brnz_sales_orders') }} bso
+        ON bc.customer_id = bso.customer_id
+    GROUP BY bc.customer_id, bc.full_name, bc.account_number
+),
+customer_rfm AS (
+    SELECT
+        *,
+        -- RFM Scores (1-5 scale)
+        NTILE(5) OVER (ORDER BY recency_days DESC) as recency_score,
+        NTILE(5) OVER (ORDER BY frequency_orders) as frequency_score,
+        NTILE(5) OVER (ORDER BY monetary_total) as monetary_score
+    FROM customer_metrics
+)
+SELECT
+    *,
+    -- RFM Segment
+    CASE
+        WHEN recency_score >= 4 AND frequency_score >= 4 THEN 'Champions'
+        WHEN recency_score >= 3 AND frequency_score >= 3 THEN 'Loyal Customers'
+        WHEN recency_score <= 2 THEN 'At Risk'
+        ELSE 'Regular'
+    END as customer_segment
+FROM customer_rfm
+```
+
+**Transformations Applied**:
+
+- ✅ Calculate RFM metrics (Recency, Frequency, Monetary)
+- ✅ Compute RFM scores using NTILE
+- ✅ Segment customers based on RFM
+- ✅ Add customer lifetime metrics
+- ✅ Calculate average order value
+
+**Row Count**: ~19,820 customers
+
+---
+
+### 3. slvr_products
+
+**Purpose**: Product performance analytics
+
+**Source Models**:
+
+- `bronze.brnz_products` (product master)
+- `bronze.brnz_sales_orders` (for sales performance)
+
+**Key Business Logic**:
+
+```sql
+WITH product_sales AS (
+    SELECT
+        bp.product_id,
+        bp.product_name,
+        bp.category_name,
+        bp.list_price,
+        bp.profit_margin,
+        -- Sales metrics
+        COUNT(DISTINCT bso.sales_order_id) as total_orders,
+        SUM(bso.quantity) as total_quantity_sold,
+        SUM(bso.line_total) as total_revenue,
+        AVG(bso.line_total) as avg_sale_amount,
+        MAX(bso.order_date) as last_sold_date,
+        -- Performance indicators
+        SUM(bso.line_total) / NULLIF(SUM(bso.quantity), 0) as revenue_per_unit
+    FROM {{ ref('brnz_products') }} bp
+    LEFT JOIN {{ ref('brnz_sales_orders') }} bso
+        ON bp.product_id = bso.product_id
+    GROUP BY
+        bp.product_id, bp.product_name, bp.category_name,
+        bp.list_price, bp.profit_margin
+)
+SELECT
+    *,
+    -- Performance categorization
+    CASE
+        WHEN total_revenue >= 50000 THEN 'High Performer'
+        WHEN total_revenue >= 10000 THEN 'Medium Performer'
+        WHEN total_revenue > 0 THEN 'Low Performer'
+        ELSE 'No Sales'
+    END as performance_category
+FROM product_sales
+```
+
+**Transformations Applied**:
+
+- ✅ Aggregate sales metrics per product
+- ✅ Calculate revenue per unit
+- ✅ Categorize product performance
+- ✅ Track last sold date
+- ✅ Compute average sale amount
+
+**Row Count**: ~504 products
+
+---
+
+## Silver to Gold Lineage
+
+### 1. gld_sales_summary
+
+**Purpose**: Daily sales metrics and KPIs
+
+**Source Models**:
+
+- `silver.slvr_sales_orders`
+
+**Key Business Logic**:
+
+```sql
+SELECT
+    CAST(order_date AS DATE) as date,
+    order_year,
+    order_quarter,
+    order_month,
+    -- Daily aggregations
+    COUNT(DISTINCT sales_order_id) as total_orders,
+    COUNT(DISTINCT customer_id) as unique_customers,
+    COUNT(DISTINCT product_id) as unique_products,
+    SUM(quantity) as total_quantity,
+    SUM(revenue) as total_revenue,
+    AVG(revenue) as avg_order_value,
+    MIN(revenue) as min_order_value,
+    MAX(revenue) as max_order_value,
+    -- Value distribution
+    SUM(CASE WHEN order_value_category = 'High Value' THEN 1 ELSE 0 END) as high_value_orders,
+    SUM(CASE WHEN order_value_category = 'Medium Value' THEN 1 ELSE 0 END) as medium_value_orders,
+    SUM(CASE WHEN order_value_category = 'Low Value' THEN 1 ELSE 0 END) as low_value_orders
+FROM {{ ref('slvr_sales_orders') }}
+GROUP BY
+    CAST(order_date AS DATE),
+    order_year,
+    order_quarter,
+    order_month
+ORDER BY date
+```
+
+**Grain**: One row per date
+
+**Row Count**: ~1,561 days
+
+**Use Cases**:
+
+- Daily sales dashboard
+- Trend analysis
+- Performance tracking
+- Executive reporting
+
+---
+
+### 2. gld_customer_metrics
+
+**Purpose**: Customer 360 view
+
+**Source Models**:
+
+- `silver.slvr_customers`
+- `silver.slvr_sales_orders` (for recent activity)
+
+**Key Business Logic**:
+
+```sql
+SELECT
+    sc.customer_id,
+    sc.full_name,
+    sc.account_number,
+    -- RFM Metrics
+    sc.recency_days,
+    sc.frequency_orders,
+    sc.monetary_total,
+    sc.customer_segment,
+    -- Lifetime metrics
+    sc.customer_lifetime_days,
+    sc.avg_order_value,
+    sc.first_order_date,
+    sc.last_order_date,
+    -- Recent activity (last 90 days)
+    COUNT(DISTINCT CASE
+        WHEN so.order_date >= DATEADD(day, -90, GETDATE())
+        THEN so.sales_order_id
+    END) as orders_last_90_days,
+    SUM(CASE
+        WHEN so.order_date >= DATEADD(day, -90, GETDATE())
+        THEN so.revenue
+        ELSE 0
+    END) as revenue_last_90_days
+FROM {{ ref('slvr_customers') }} sc
+LEFT JOIN {{ ref('slvr_sales_orders') }} so
+    ON sc.customer_id = so.customer_id
+GROUP BY
+    sc.customer_id, sc.full_name, sc.account_number,
+    sc.recency_days, sc.frequency_orders, sc.monetary_total,
+    sc.customer_segment, sc.customer_lifetime_days,
+    sc.avg_order_value, sc.first_order_date, sc.last_order_date
+```
+
+**Grain**: One row per customer
+
+**Row Count**: ~19,820 customers
+
+**Use Cases**:
+
+- Customer segmentation
+- Retention analysis
+- Marketing campaigns
+- Churn prediction
+
+---
+
+### 3. gld_product_performance
+
+**Purpose**: Product analytics and insights
+
+**Source Models**:
+
+- `silver.slvr_products`
+
+**Key Business Logic**:
+
+```sql
+WITH product_rankings AS (
+    SELECT
+        *,
+        -- Rankings
+        ROW_NUMBER() OVER (
+            PARTITION BY category_name
+            ORDER BY total_revenue DESC
+        ) as revenue_rank_in_category,
+        ROW_NUMBER() OVER (
+            ORDER BY total_revenue DESC
+        ) as overall_revenue_rank,
+        -- Percentiles
+        PERCENT_RANK() OVER (
+            ORDER BY total_revenue
+        ) as revenue_percentile
+    FROM {{ ref('slvr_products') }}
+)
+SELECT
+    product_id,
+    product_name,
+    category_name,
+    list_price,
+    profit_margin,
+    total_orders,
+    total_quantity_sold,
+    total_revenue,
+    revenue_per_unit,
+    performance_category,
+    revenue_rank_in_category,
+    overall_revenue_rank,
+    revenue_percentile,
+    -- Performance indicators
+    CASE
+        WHEN revenue_percentile >= 0.9 THEN 'Top 10%'
+        WHEN revenue_percentile >= 0.75 THEN 'Top 25%'
+        WHEN revenue_percentile >= 0.5 THEN 'Top 50%'
+        ELSE 'Bottom 50%'
+    END as revenue_tier
+FROM product_rankings
+```
+
+**Grain**: One row per product
+
+**Row Count**: ~504 products
+
+**Use Cases**:
+
+- Product portfolio analysis
+- Inventory planning
+- Pricing strategy
+- Category performance
+
+---
+
+## Column-Level Lineage
+
+### Example: total_revenue in gld_sales_summary
+
+**Lineage Chain**:
+
+```
+Source: Sales.SalesOrderDetail.LineTotal
+    │
+    ├─ Type: decimal(38,6)
+    └─ Business meaning: Line item total amount
+              │
+              ▼
+Bronze: brnz_sales_orders.line_total
+    │
+    ├─ Transformation: Column rename (LineTotal → line_total)
+    ├─ Type: decimal(38,6)
+    └─ Validation: Filter WHERE OrderQty > 0
+              │
+              ▼
+Silver: slvr_sales_orders.revenue
+    │
+    ├─ Transformation: Rename (line_total → revenue)
+    ├─ Type: decimal(38,6)
+    └─ Business logic: Join with customers and products
+              │
+              ▼
+Gold: gld_sales_summary.total_revenue
+    │
+    ├─ Transformation: SUM(revenue) GROUP BY date
+    ├─ Type: decimal(38,6)
+    └─ Grain: Daily aggregation
 ```
 
 ---
 
-## Benefits of Data Lineage
+## Transformation Details
 
-### 1. **Impact Analysis**
+### Data Quality Rules
 
-- Understand downstream effects of changes
-- Prevent breaking changes
-- Plan migrations safely
+**Bronze Layer**:
 
-### 2. **Root Cause Analysis**
+- ✅ Remove records with NULL primary keys
+- ✅ Filter invalid quantities (qty > 0)
+- ✅ Standardize date formats
+- ✅ Convert data types consistently
 
-- Trace data quality issues to source
-- Find where bad data entered pipeline
-- Identify transformation errors
+**Silver Layer**:
 
-### 3. **Compliance**
+- ✅ Apply business validation rules
+- ✅ Handle NULL values with COALESCE
+- ✅ Ensure referential integrity
+- ✅ Add data quality flags
 
-- Track PII (Personal Identifiable Information) flow
-- Document data transformations for audits
-- Prove data governance
+**Gold Layer**:
 
-### 4. **Optimization**
+- ✅ Validate aggregation logic
+- ✅ Ensure no data loss in aggregations
+- ✅ Add data freshness timestamps
+- ✅ Implement consistency checks
 
-- Identify unused models
-- Find redundant transformations
-- Optimize query paths
+### Materialization Strategy
 
-### 5. **Onboarding**
+| Layer  | Materialization | Reason                                |
+| ------ | --------------- | ------------------------------------- |
+| Bronze | VIEW            | Always fresh, minimal transformation  |
+| Silver | TABLE           | Complex joins, frequent queries       |
+| Gold   | TABLE           | Heavy aggregations, analytics queries |
 
-- New team members understand data flow
-- Visual documentation
-- Self-service exploration
+### Refresh Schedule
 
----
-
-## Advanced Lineage Features
-
-### 1. **Test Coverage Visualization**
-
-See which models have tests:
-
-```
-Model: slvr_sales_orders
-Tests:
-  ✅ unique_combination_of_columns (sales_order_id, order_detail_id)
-  ✅ not_null (customer_id, product_id)
-  ✅ relationships (customer_id → slvr_customers)
-  ✅ positive_values (order_qty, unit_price, line_total)
-
-Coverage: 90% (18/20 columns tested)
-```
-
-### 2. **Freshness Tracking**
-
-See data freshness in lineage:
-
-```
-Source: SalesOrderHeader
-  Last Update: 2024-12-04 10:30:00
-  Freshness: ✅ OK (2 hours ago)
-  ↓
-brnz_sales_orders
-  Last Run: 2024-12-04 11:00:00
-  Status: ✅ SUCCESS
-  ↓
-slvr_sales_orders
-  Last Run: 2024-12-04 11:05:00
-  Status: ✅ SUCCESS
-```
-
-### 3. **Exposure Tracking**
-
-See which dashboards use each model:
-
-```
-gld_sales_summary
-  └── Exposures:
-      ├── Tableau: Executive Dashboard
-      ├── Power BI: Sales Analytics
-      └── Looker: Daily Sales Report
-```
+- **Bronze**: Real-time (view refresh on query)
+- **Silver**: Daily at 1:00 AM (via Airflow)
+- **Gold**: Daily at 1:00 AM (after Silver)
 
 ---
 
-## Lineage Best Practices
+## Impact Analysis
 
-1. **Document Everything**
+### Changing Source Schema
 
-   - Add descriptions to all models
-   - Document column meanings
-   - Explain business logic
+If `Sales.SalesOrderDetail` schema changes:
 
-2. **Use Clear Naming**
+**Impact**:
 
-   - Prefix by layer: brnz*, slvr*, gld\_
-   - Descriptive names: sales_orders not so1
-   - Consistent patterns
+1. **Bronze**: `brnz_sales_orders` breaks
+2. **Silver**: `slvr_sales_orders` fails to build
+3. **Gold**: `gld_sales_summary` and `gld_customer_metrics` fail
 
-3. **Keep Lineage Simple**
+**Mitigation**:
 
-   - Avoid circular dependencies
-   - Minimize cross-layer references
-   - Clear dependency chains
+- Schema tests in DBT
+- CI/CD validation before deployment
+- Backward compatibility checks
 
-4. **Regular Reviews**
-   - Monthly lineage audits
-   - Remove unused models
-   - Simplify complex paths
+### Changing Business Logic
+
+If revenue calculation changes in Silver:
+
+**Impact**:
+
+- **Direct**: `slvr_sales_orders.revenue` column
+- **Downstream**:
+  - `gld_sales_summary.total_revenue`
+  - `gld_customer_metrics.monetary_total`
+
+**Mitigation**:
+
+- Data quality tests on Silver
+- Reconciliation with Bronze
+- Historical data validation
 
 ---
 
-## Conclusion
+## DBT Lineage Tools
 
-**BONUS POINTS EARNED: +5**
+### Generate Lineage Graph
 
-This comprehensive data lineage implementation provides:
+```bash
+# Generate DBT documentation with lineage
+docker exec dataops-dbt dbt docs generate
 
-✅ **Full visibility** into data transformations
-✅ **Interactive visualization** via DBT docs
-✅ **Column-level tracking** for detailed analysis
-✅ **Impact analysis** for safe schema changes
-✅ **Compliance support** with audit trails
-✅ **Self-service documentation** for all users
+# Serve documentation locally
+docker exec dataops-dbt dbt docs serve --port 8001
+```
 
-Combined with multi-environment setup, this brings **total bonus to +10 points**.
+### View in DBT Docs
+
+1. Open http://localhost:8001
+2. Click on any model
+3. View "Lineage" tab for visual graph
+4. Click "Details" for column lineage
+
+### Lineage Commands
+
+```bash
+# List all models with dependencies
+docker exec dataops-dbt dbt list --select +gld_sales_summary
+
+# Show upstream dependencies
+docker exec dataops-dbt dbt list --select +gld_sales_summary --output json
+
+# Show downstream dependencies
+docker exec dataops-dbt dbt list --select gld_sales_summary+
+```
+
+---
+
+## Best Practices
+
+### 1. Documentation
+
+- Document transformation logic in model files
+- Add column descriptions in schema.yml
+- Maintain this lineage document
+
+### 2. Naming Conventions
+
+- Use descriptive column names
+- Prefix layers (brnz*, slvr*, gld\_)
+- Consistent naming across layers
+
+### 3. Testing
+
+- Test source freshness
+- Validate transformations at each layer
+- Monitor data quality metrics
+
+### 4. Version Control
+
+- Track schema changes in Git
+- Document breaking changes
+- Use semantic versioning
+
+---
+
+## Related Documentation
+
+- **[ARCHITECTURE_DIAGRAM.md](ARCHITECTURE_DIAGRAM.md)** - System architecture
+- **[TESTING_STRATEGY.md](TESTING_STRATEGY.md)** - Data quality tests
+- **[DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md)** - Deployment procedures
+
+---
+
+**Last Updated**: December 2025  
+**Version**: 1.0.0  
+**Maintained By**: DataOps Project Team

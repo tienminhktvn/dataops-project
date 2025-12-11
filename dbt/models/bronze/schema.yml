@@ -1,9 +1,6 @@
 version: 2
 
 models:
-  # ===========================================================================
-  # BRONZE: Sales Orders
-  # ===========================================================================
   - name: brnz_sales_orders
     description: |
       ## Bronze Layer: Sales Orders
@@ -57,12 +54,15 @@ models:
         description: Date when order was placed
         tests:
           - not_null
+          - no_future_dates
 
       - name: due_date
         description: Date when order is due to be delivered
 
       - name: ship_date
         description: Date when order was actually shipped
+        tests:
+          - no_future_dates
 
       - name: days_to_ship
         description: Calculated field - days between order and ship date
@@ -92,6 +92,9 @@ models:
         description: Foreign key to Customer
         tests:
           - not_null
+          - relationships:
+              to: ref('brnz_customers')
+              field: customer_id
 
       - name: sales_person_id
         description: Foreign key to SalesPerson (null for online orders)
@@ -103,6 +106,9 @@ models:
         description: Foreign key to Product
         tests:
           - not_null
+          - relationships:
+              to: ref('brnz_products')
+              field: product_id
 
       # -----------------------------------------------------------------------
       # Product Line Item Columns
@@ -111,11 +117,13 @@ models:
         description: Quantity ordered
         tests:
           - not_null
+          - positive_values
 
       - name: unit_price
         description: Selling price per unit
         tests:
           - not_null
+          - positive_values
 
       - name: unit_price_discount
         description: Discount amount per unit (dollars)
@@ -124,9 +132,12 @@ models:
         description: Line item total (unit_price * qty * (1 - discount))
         tests:
           - not_null
+          - positive_values
 
       - name: discount_percentage
         description: Calculated discount as percentage
+        tests:
+          - valid_percentage
 
       - name: is_discounted
         description: Flag indicating if line has discount (0/1)
@@ -291,6 +302,10 @@ models:
 
       - name: profit_margin_percentage
         description: Profit margin as percentage of list price
+        tests:
+          - valid_percentage:
+              min_value: -50
+              max_value: 200
 
       - name: product_status
         description: Active, Discontinued, Ended, or Not Yet Available

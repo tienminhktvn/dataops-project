@@ -1,928 +1,910 @@
-# 📘 Deployment Runbook
+# 🚀 Deployment Runbook
 
-> **Comprehensive guide for deploying and operating the DataOps pipeline**
-> Version: 1.0 | Last Updated: 2024-01-15
+> **Comprehensive operational guide for deploying and managing the DataOps pipeline**
 
 ---
 
 ## 📋 Table of Contents
 
-1. [Pre-Deployment Checklist](#pre-deployment-checklist)
-2. [Deployment Procedures](#deployment-procedures)
-3. [Environment-Specific Deployment](#environment-specific-deployment)
-4. [Rollback Procedures](#rollback-procedures)
-5. [Health Checks](#health-checks)
-6. [Troubleshooting Guide](#troubleshooting-guide)
-7. [Incident Response](#incident-response)
-8. [Monitoring & Alerts](#monitoring--alerts)
+1. [Overview](#overview)
+2. [Pre-Deployment Checklist](#pre-deployment-checklist)
+3. [Local Development Deployment](#local-development-deployment)
+4. [CI/CD Automated Deployment](#cicd-automated-deployment)
+5. [Production Deployment](#production-deployment)
+6. [Rollback Procedures](#rollback-procedures)
+7. [Health Checks](#health-checks)
+8. [Troubleshooting](#troubleshooting)
+9. [Monitoring & Alerts](#monitoring--alerts)
 
 ---
 
-## 🔍 Pre-Deployment Checklist
+## Overview
 
-### Before Every Deployment
+### Deployment Strategy
 
-- [ ] **Code Review Completed**
-  - PR approved by at least 1 team member
-  - All CI checks passing
-  - No merge conflicts
+| Environment   | Trigger           | Runner        | Target | Auto Deploy |
+| ------------- | ----------------- | ------------- | ------ | ----------- |
+| **Local Dev** | Manual            | Local machine | dev    | No          |
+| **CI**        | Pull Request      | GitHub-hosted | ci     | Automatic   |
+| **Dev**       | Push to `develop` | Self-hosted   | dev    | Automatic   |
+| **Prod**      | Push to `main`    | Self-hosted   | prod   | Automatic   |
 
-- [ ] **Testing Validation**
-  - All DBT tests passing locally
-  - Data quality checks verified
-  - No failing unit tests
+### Deployment Architecture
 
-- [ ] **Documentation Updated**
-  - Model descriptions current
-  - Schema.yml updated for new columns
-  - README reflects any new features
-
-- [ ] **Database Readiness**
-  - Source database accessible
-  - Connection credentials valid
-  - Target schema permissions verified
-
-- [ ] **Backup Verified**
-  - Previous deployment backup exists
-  - Backup restoration tested (production only)
-
-- [ ] **Team Notification**
-  - Deployment window communicated
-  - On-call engineer identified
-  - Stakeholders notified (production only)
-
-### Production-Only Checklist
-
-- [ ] **Change Management**
-  - Change ticket created and approved
-  - Deployment scheduled during maintenance window
-  - Rollback plan documented
-
-- [ ] **Capacity Planning**
-  - Database capacity sufficient
-  - Pipeline execution time estimated
-  - SLA requirements reviewed
+```
+Code Push (GitHub)
+       │
+       ├─── Pull Request
+       │         │
+       │         ▼
+       │    GitHub-hosted Runner (CI)
+       │         │
+       │         └─ DBT Test
+       │         └─ Lint Check
+       │         └─ PR Validation
+       │
+       ├─── Push to develop
+       │         │
+       │         ▼
+       │    Self-hosted Runner (Dev)
+       │         │
+       │         └─ Deploy to Dev Environment
+       │         └─ Health Check
+       │         └─ Smoke Tests
+       │
+       └─── Push to main
+                 │
+                 ▼
+            Self-hosted Runner (Prod)
+                 │
+                 └─ Create Backup
+                 └─ Deploy to Prod
+                 └─ Validate
+                 └─ Slack Notification
+```
 
 ---
 
-## 🚀 Deployment Procedures
+## Pre-Deployment Checklist
 
-### 1. Development Environment Deployment
+### 1. Environment Validation
 
-#### Manual Deployment (Local Docker)
+**Check Docker Environment**:
+
+```powershell
+# Verify Docker is running
+docker info
+
+# Check available disk space (need at least 5GB)
+Get-PSDrive C
+
+# Verify Docker Compose version
+docker-compose --version
+```
+
+**Check Git Status**:
+
+```powershell
+# Ensure you're on the correct branch
+git branch --show-current
+
+# Check for uncommitted changes
+git status
+
+# Verify remote connection
+git remote -v
+```
+
+### 2. Dependency Validation
+
+**Verify Required Files**:
+
+```powershell
+# Check critical files exist
+Test-Path docker-compose.yml
+Test-Path dbt/dbt_project.yml
+Test-Path dbt/profiles.yml
+Test-Path airflow/dags/dbt_pipeline_dag.py
+```
+
+**Validate Configuration**:
+
+```powershell
+# Check DBT project configuration
+docker run --rm -v ${PWD}/dbt:/usr/app dbt-sqlserver dbt debug --profiles-dir .
+
+# Validate Docker Compose file
+docker-compose config
+```
+
+### 3. Credential Check
+
+**Required Secrets**:
+
+- ✅ SQL Server SA password
+- ✅ Postgres password (Airflow metadata)
+- ✅ Slack webhook URL (optional, for notifications)
+
+**Verify Environment Variables**:
+
+```powershell
+# Check .env file exists
+Get-Content .env
+
+# Required variables:
+# - SLACK_WEBHOOK_URL (optional)
+```
+
+### 4. Database Readiness
+
+**SQL Server**:
+
+```powershell
+# Verify SQL Server container health
+docker ps --filter "name=dataops-sqlserver"
+
+# Test SQL Server connection
+docker exec dataops-sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourPassword123! -Q "SELECT @@VERSION"
+```
+
+**Postgres (Airflow Metadata)**:
+
+```powershell
+# Check Postgres is healthy
+docker exec dataops-postgres pg_isready -U airflow
+```
+
+---
+
+## Local Development Deployment
+
+### Step 1: Clone Repository
+
+```powershell
+# Clone the project
+git clone https://github.com/tienminhktvn/dataops-project.git
+cd dataops-project
+
+# Checkout develop branch
+git checkout develop
+```
+
+### Step 2: Configure Environment
+
+```powershell
+# Create .env file for Slack notifications (optional)
+echo "SLACK_WEBHOOK_URL=your_webhook_url_here" > .env
+
+# Verify DBT profiles
+cat dbt/profiles.yml
+```
+
+### Step 3: Start Infrastructure
+
+```powershell
+# Build and start all containers
+docker-compose up -d --build
+
+# Expected output:
+# ✓ Container dataops-sqlserver        Started
+# ✓ Container dataops-postgres         Started
+# ✓ Container dataops-airflow-webserver Started
+# ✓ Container dataops-airflow-scheduler Started
+# ✓ Container dataops-dbt              Started
+# ✓ Container cloudbeaver              Started
+```
+
+### Step 4: Wait for Services
+
+```powershell
+# Wait for SQL Server (takes ~30-60 seconds)
+Start-Sleep -Seconds 60
+
+# Check container health
+docker ps
+
+# All containers should show STATUS as "Up" or "healthy"
+```
+
+### Step 5: Restore Database
+
+```powershell
+# Restore AdventureWorks2014 database
+docker exec dataops-sqlserver /bin/bash /tmp/restore_db.sh
+
+# Verify database restored
+docker exec dataops-sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourPassword123! -Q "SELECT name FROM sys.databases WHERE name = 'AdventureWorks2014'"
+```
+
+### Step 6: Run DBT Models
+
+```powershell
+# Test DBT connection
+docker exec dataops-dbt dbt debug --profiles-dir .
+
+# Install DBT packages
+docker exec dataops-dbt dbt deps --profiles-dir .
+
+# Run all models
+docker exec dataops-dbt dbt run --target dev --profiles-dir .
+
+# Expected output:
+# Completed successfully
+# Done. PASS=9 WARN=0 ERROR=0 SKIP=0 TOTAL=9
+```
+
+### Step 7: Run Tests
+
+```powershell
+# Run data quality tests
+docker exec dataops-dbt dbt test --target dev --profiles-dir .
+
+# Expected: All tests pass
+```
+
+### Step 8: Access UIs
+
+**Airflow Web UI**:
+
+- URL: http://localhost:8080
+- Username: `admin`
+- Password: `admin`
+
+**CloudBeaver (SQL UI)**:
+
+- URL: http://localhost:8978
+
+**DBT Documentation**:
+
+```powershell
+# Generate and serve DBT docs
+docker exec dataops-dbt dbt docs generate --profiles-dir .
+docker exec -d dataops-dbt dbt docs serve --port 8001 --profiles-dir .
+```
+
+- URL: http://localhost:8001
+
+---
+
+## CI/CD Automated Deployment
+
+### CI Pipeline (Pull Request)
+
+**Triggered By**:
+
+- Opening a Pull Request
+- Pushing new commits to an open PR
+
+**Workflow**: `.github/workflows/ci-dbt-test.yml`
+
+**Steps**:
+
+1. ✅ Checkout code
+2. ✅ Start SQL Server container
+3. ✅ Restore AdventureWorks database
+4. ✅ Build DBT image
+5. ✅ Run `dbt deps`
+6. ✅ Run `dbt parse` (validate SQL)
+7. ✅ Run `dbt run --target ci`
+8. ✅ Run `dbt test --target ci`
+9. ✅ Generate coverage report
+10. ✅ Comment results on PR
+
+**Example PR Comment**:
+
+```
+✅ DBT Pipeline Tests Passed
+
+📊 Test Results:
+- Total Tests: 50
+- Passed: 50
+- Failed: 0
+- Warnings: 0
+
+🎯 Models Built:
+- Bronze: 3
+- Silver: 3
+- Gold: 3
+
+✨ All checks passed successfully!
+```
+
+### CD Pipeline (Development)
+
+**Triggered By**:
+
+- Push to `develop` branch
+- Manual workflow dispatch (dev environment)
+
+**Workflow**: `.github/workflows/cd-deploy.yml`
+
+**Runner**: Self-hosted (Ubuntu)
+
+**Steps**:
+
+1. **Determine Environment**: Resolve to `dev` target
+2. **Checkout Code**: Pull latest code from `develop`
+3. **Restart Containers**:
+   - Stop all containers
+   - Fix permissions on Airflow directories
+   - Rebuild and restart with `docker-compose up -d --build`
+4. **Wait for Health**: Sleep 60s for services to be ready
+5. **Database Restore**: Ensure AdventureWorks is available
+6. **Run DBT**:
+   - Install dependencies (`dbt deps`)
+   - Run models (`dbt run --target dev`)
+   - Run tests (`dbt test --target dev`)
+7. **Validate**: Check Airflow DAG is registered
+8. **Notification**: Send success/failure to Slack (optional)
+
+**Deployment Time**: ~3-5 minutes
+
+### CD Pipeline (Production)
+
+**Triggered By**:
+
+- Push to `main` branch
+- Manual workflow dispatch (prod environment)
+
+**Workflow**: `.github/workflows/cd-deploy.yml`
+
+**Runner**: Self-hosted (Ubuntu)
+
+**Steps**:
+
+1. **Determine Environment**: Resolve to `prod` target
+2. **Create Backup**: Create metadata file with commit SHA
+3. **Checkout Code**: Pull latest code from `main`
+4. **Restart Containers**: Same as dev but with prod config
+5. **Wait for Health**: Sleep 60s
+6. **Database Restore**: Ensure production data is ready
+7. **Run DBT**:
+   - Install dependencies (`dbt deps`)
+   - Run models (`dbt run --target prod`)
+   - Run tests (`dbt test --target prod`)
+8. **Validate**: Comprehensive health checks
+9. **Notification**: Send success/failure to Slack
+
+**Deployment Time**: ~4-6 minutes
+
+**Production-Specific Safeguards**:
+
+- ✅ Backup metadata created before deployment
+- ✅ Concurrency control (no parallel deploys)
+- ✅ Full test suite required to pass
+- ✅ Slack notification for visibility
+
+---
+
+## Production Deployment
+
+### Manual Production Deployment
+
+If you need to deploy to production manually:
+
+```powershell
+# 1. Ensure you're on main branch
+git checkout main
+git pull origin main
+
+# 2. Create backup point
+git tag -a "backup-$(Get-Date -Format 'yyyyMMdd-HHmmss')" -m "Pre-deployment backup"
+git push origin --tags
+
+# 3. Stop containers
+docker-compose down
+
+# 4. Fix permissions
+docker run --rm -v ${PWD}/airflow:/opt/airflow alpine sh -c "chmod -R 777 /opt/airflow"
+
+# 5. Deploy
+docker-compose up -d --build
+
+# 6. Wait for services
+Start-Sleep -Seconds 60
+
+# 7. Restore database
+docker exec dataops-sqlserver /bin/bash /tmp/restore_db.sh
+
+# 8. Run DBT (production target)
+docker exec dataops-dbt dbt deps --profiles-dir .
+docker exec dataops-dbt dbt run --target prod --profiles-dir .
+docker exec dataops-dbt dbt test --target prod --profiles-dir .
+
+# 9. Validate Airflow DAG
+docker exec dataops-airflow-scheduler airflow dags list | Select-String "dbt_dataops_pipeline"
+```
+
+### Zero-Downtime Deployment (Future)
+
+For production systems requiring zero downtime, consider:
+
+1. **Blue-Green Deployment**:
+
+   - Maintain two identical environments
+   - Deploy to inactive (green) environment
+   - Switch traffic after validation
+   - Keep blue as rollback option
+
+2. **Rolling Updates**:
+   - Deploy to one Airflow scheduler at a time
+   - Keep at least one scheduler active
+   - Validate before moving to next
+
+**Note**: Current setup uses single-instance deployment suitable for development and small-scale production.
+
+---
+
+## Rollback Procedures
+
+### Automated Rollback
+
+**Workflow**: `.github/workflows/cd-rollback.yml`
+
+**Trigger**: Manual (workflow_dispatch)
+
+**Required Inputs**:
+
+- `environment`: dev or prod
+- `backup_sha`: Commit SHA to rollback to (optional, defaults to HEAD~1)
+- `reason`: Reason for rollback (required for audit)
+
+**Example Rollback**:
 
 ```bash
-# Step 1: Start infrastructure
-cd /path/to/dataops-project
-docker-compose up -d
-
-# Step 2: Wait for services to be healthy
-docker-compose ps
-# Ensure all services show "healthy" status
-
-# Step 3: Install DBT dependencies
-docker exec dataops-dbt dbt deps --profiles-dir /usr/app/dbt
-
-# Step 4: Run DBT models
-docker exec dataops-dbt dbt run --profiles-dir /usr/app/dbt --target dev
-
-# Step 5: Execute tests
-docker exec dataops-dbt dbt test --profiles-dir /usr/app/dbt --target dev
-
-# Step 6: Generate documentation
-docker exec dataops-dbt dbt docs generate --profiles-dir /usr/app/dbt --target dev
-
-# Step 7: Verify deployment
-docker exec dataops-dbt dbt source freshness --profiles-dir /usr/app/dbt --target dev
-
-# Step 8: Access Airflow UI
-# Open browser: http://localhost:8080
-# Username: airflow
-# Password: airflow
+# Via GitHub UI:
+1. Go to Actions tab
+2. Select "CD - Rollback Deployment"
+3. Click "Run workflow"
+4. Fill in:
+   - Environment: prod
+   - Backup SHA: abc123def (or leave empty for previous commit)
+   - Reason: "Critical bug in sales calculation"
+5. Click "Run workflow"
 ```
 
-**Expected Duration**: 5-10 minutes
+**Rollback Steps**:
 
-#### Automated Deployment (GitHub Actions)
+1. **Validate**: Check target commit exists
+2. **Checkout**: Switch to target commit SHA
+3. **Create .env**: Inject Slack webhook
+4. **Restart Containers**: Rebuild with old code
+5. **Wait for Health**: 60 seconds
+6. **Restore Database**: Ensure database is ready
+7. **Run DBT**: Execute with target environment
+8. **Validate**: Check DBT models and Airflow DAG
+9. **Notify**: Send rollback confirmation
 
-Triggered automatically on push to `develop` branch:
-
-```yaml
-# .github/workflows/cd-deploy.yml handles:
-# - Environment detection (develop → dev)
-# - Pre-deployment validation
-# - DBT model execution
-# - Data quality testing
-# - Health checks
-# - Notifications
-```
-
-**Expected Duration**: 10-15 minutes
-
----
-
-### 2. Production Environment Deployment
-
-#### Prerequisites
-
-1. **Environment Variables Set** (in GitHub Secrets):
-   ```
-   PROD_SQL_SERVER=<production-server>
-   PROD_SQL_DATABASE=<production-database>
-   PROD_SQL_USERNAME=<service-account>
-   PROD_SQL_PASSWORD=<secure-password>
-   PROD_SQL_SCHEMA=<target-schema>
-   ```
-
-2. **Production Database Prepared**:
-   - Target schema exists: `dbo`, `bronze`, `silver`, `gold`
-   - Service account has permissions: `CREATE TABLE`, `SELECT`, `INSERT`, `UPDATE`
-
-#### Deployment Steps
-
-```bash
-# Step 1: Merge PR to main branch
-# This triggers automatic deployment via GitHub Actions
-
-# Step 2: Monitor deployment progress
-# Go to: GitHub → Actions → "CD - Deploy Pipeline"
-
-# Step 3: Verify deployment jobs
-# ✅ Pre-Deployment Checks
-# ✅ Create Backup (production only)
-# ✅ Deploy DBT Models
-# ✅ Run DBT Tests
-# ✅ Source Freshness Check
-# ✅ Generate Documentation
-# ✅ Post-Deployment Health Check
-# ✅ Send Notifications
-
-# Step 4: Manual verification (after CI/CD completes)
-# Connect to production database
-USE [AdventureWorks2014];
-
--- Check Bronze layer
-SELECT COUNT(*) FROM bronze.brnz_sales_orders;
-SELECT COUNT(*) FROM bronze.brnz_customers;
-SELECT COUNT(*) FROM bronze.brnz_products;
-
--- Check Silver layer
-SELECT COUNT(*) FROM silver.slvr_sales_orders;
-SELECT COUNT(*) FROM silver.slvr_customers;
-SELECT COUNT(*) FROM silver.slvr_products;
-
--- Check Gold layer
-SELECT COUNT(*) FROM gold.gld_sales_summary;
-SELECT COUNT(*) FROM gold.gld_customer_metrics;
-SELECT COUNT(*) FROM gold.gld_product_performance;
-
--- Verify data freshness
-SELECT MAX(order_date) as latest_order_date FROM silver.slvr_sales_orders;
-```
-
-**Expected Duration**: 15-25 minutes
-
-#### Manual Production Deployment (Emergency Only)
-
-```bash
-# Only use if GitHub Actions is unavailable
-
-# Step 1: Set environment variables
-export DBT_TARGET=prod
-export PROD_SQL_SERVER=<server>
-export PROD_SQL_DATABASE=<database>
-export PROD_SQL_USERNAME=<username>
-export PROD_SQL_PASSWORD=<password>
-
-# Step 2: Run deployment
-cd dbt/
-dbt deps --profiles-dir .
-dbt run --profiles-dir . --target prod --full-refresh
-dbt test --profiles-dir . --target prod
-
-# Step 3: Document manual deployment
-# Create incident ticket with:
-# - Reason for manual deployment
-# - Who performed it
-# - Timestamp
-# - Verification results
-```
-
----
-
-## 🌍 Environment-Specific Deployment
-
-### Development Environment
-
-**Purpose**: Feature development and testing
-
-**Deployment Trigger**: Push to `develop` branch
-
-**Configuration**:
-```yaml
-Target: dev
-Database: Local SQL Server (Docker)
-Schedule: On-demand
-Notifications: Disabled
-```
-
-**Rollback**: Not required (reset via docker-compose)
-
----
-
-### Staging Environment (Optional)
-
-**Purpose**: Pre-production validation
-
-**Deployment Trigger**: Manual via workflow_dispatch
-
-**Configuration**:
-```yaml
-Target: staging
-Database: Staging SQL Server
-Schedule: Nightly at 2 AM UTC
-Notifications: Slack #data-staging
-```
-
-**Rollback**: Available via GitHub Actions
-
----
-
-### Production Environment
-
-**Purpose**: Live analytics and reporting
-
-**Deployment Trigger**: Push to `main` branch
-
-**Configuration**:
-```yaml
-Target: prod
-Database: Production SQL Server
-Schedule: Daily at 1 AM UTC
-Notifications: Slack #data-prod + Email
-SLA: 2 hours
-```
-
-**Rollback**: Available via GitHub Actions (requires approval)
-
----
-
-## ⏪ Rollback Procedures
-
-### When to Rollback
-
-Execute rollback if:
-- Data quality tests fail in production
-- Business reports show incorrect data
-- Performance degradation (>50% slower)
-- Critical bug discovered post-deployment
-- Database errors or connection issues
-
-### Automated Rollback (Recommended)
-
-```bash
-# Step 1: Go to GitHub Actions
-# Navigate to: .github/workflows/cd-rollback.yml
-
-# Step 2: Click "Run workflow"
-
-# Step 3: Fill in parameters:
-Environment: prod
-Backup SHA: <leave empty for previous commit>
-Reason: <brief description of issue>
-
-# Step 4: Confirm and execute
-
-# Step 5: Monitor rollback progress
-# ✅ Validate Rollback Request
-# ✅ Backup Current State
-# ✅ Execute Rollback (deploy previous version)
-# ✅ Run Verification Tests
-# ✅ Verify Rollback Success
-# ✅ Notify Team
-```
-
-**Expected Duration**: 10-15 minutes
+**Rollback Time**: ~3-5 minutes
 
 ### Manual Rollback
 
-```bash
-# Step 1: Identify target commit SHA
+If automated rollback fails:
+
+```powershell
+# 1. Identify target commit
 git log --oneline -10
-# Example output:
-# abc1234 (HEAD) Fix: Update customer segmentation
-# def5678 Feat: Add product performance metrics
-# ghi9012 Feat: Implement RFM analysis
 
-# Step 2: Checkout previous commit
-git checkout def5678
+# 2. Checkout target commit
+git checkout <commit_sha>
 
-# Step 3: Deploy previous version
-cd dbt/
-dbt deps --profiles-dir .
-dbt run --profiles-dir . --target prod --full-refresh
+# 3. Stop containers
+docker-compose down
 
-# Step 4: Run tests
-dbt test --profiles-dir . --target prod
+# 4. Clear volumes (if needed)
+docker volume rm dataops-project_sqlserver_data
+docker volume rm dataops-project_postgres_data
 
-# Step 5: Verify rollback
-# Query production database to verify data correctness
+# 5. Restart containers
+docker-compose up -d --build
 
-# Step 6: Document rollback
-# Create post-incident report with:
-# - Root cause analysis
-# - Timeline of events
-# - Corrective actions
+# 6. Wait for services
+Start-Sleep -Seconds 60
+
+# 7. Restore database
+docker exec dataops-sqlserver /bin/bash /tmp/restore_db.sh
+
+# 8. Run DBT with appropriate target
+docker exec dataops-dbt dbt deps --profiles-dir .
+docker exec dataops-dbt dbt run --target prod --profiles-dir .
+docker exec dataops-dbt dbt test --target prod --profiles-dir .
+
+# 9. Validate
+docker exec dataops-airflow-scheduler airflow dags list
+docker exec dataops-dbt dbt run-operation test_source_freshness --target prod --profiles-dir .
 ```
 
-### Post-Rollback Actions
+### Rollback Validation
 
-1. **Immediate** (within 1 hour):
-   - [ ] Verify all reports are accurate
-   - [ ] Check Airflow DAG status
-   - [ ] Notify stakeholders of rollback completion
+After rollback, verify:
 
-2. **Short-term** (within 24 hours):
-   - [ ] Identify root cause of failure
-   - [ ] Create bug fix PR
-   - [ ] Add regression tests
-   - [ ] Update deployment checklist
+```powershell
+# Check containers are running
+docker ps
 
-3. **Long-term** (within 1 week):
-   - [ ] Conduct post-incident review
-   - [ ] Update runbook with lessons learned
-   - [ ] Implement additional safeguards
-   - [ ] Train team on new procedures
+# Verify Airflow DAG is active
+docker exec dataops-airflow-scheduler airflow dags list | Select-String "dbt_dataops_pipeline"
 
----
+# Check DBT models exist
+docker exec dataops-sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourPassword123! -Q "SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA IN ('bronze', 'silver', 'gold')"
 
-## 🏥 Health Checks
-
-### Automated Health Checks (CI/CD)
-
-The deployment workflow includes automatic health checks:
-
-```python
-# Post-deployment health validation
-def check_pipeline_health():
-    checks = {
-        'bronze_tables_exist': verify_bronze_layer(),
-        'silver_tables_exist': verify_silver_layer(),
-        'gold_tables_exist': verify_gold_layer(),
-        'row_counts_valid': verify_row_counts(),
-        'data_quality_passing': verify_test_results(),
-        'freshness_acceptable': verify_source_freshness()
-    }
-
-    return all(checks.values())
-```
-
-### Manual Health Checks
-
-#### Database Health Check
-
-```sql
--- Check 1: All tables exist
-SELECT
-    SCHEMA_NAME(schema_id) as schema_name,
-    name as table_name,
-    create_date,
-    modify_date
-FROM sys.tables
-WHERE SCHEMA_NAME(schema_id) IN ('bronze', 'silver', 'gold')
-ORDER BY schema_name, table_name;
-
--- Expected: 9 tables (3 per layer)
-
--- Check 2: Row counts within expected ranges
-SELECT 'bronze.brnz_sales_orders' as table_name, COUNT(*) as row_count FROM bronze.brnz_sales_orders
-UNION ALL
-SELECT 'bronze.brnz_customers', COUNT(*) FROM bronze.brnz_customers
-UNION ALL
-SELECT 'bronze.brnz_products', COUNT(*) FROM bronze.brnz_products
-UNION ALL
-SELECT 'silver.slvr_sales_orders', COUNT(*) FROM silver.slvr_sales_orders
-UNION ALL
-SELECT 'silver.slvr_customers', COUNT(*) FROM silver.slvr_customers
-UNION ALL
-SELECT 'silver.slvr_products', COUNT(*) FROM silver.slvr_products
-UNION ALL
-SELECT 'gold.gld_sales_summary', COUNT(*) FROM gold.gld_sales_summary
-UNION ALL
-SELECT 'gold.gld_customer_metrics', COUNT(*) FROM gold.gld_customer_metrics
-UNION ALL
-SELECT 'gold.gld_product_performance', COUNT(*) FROM gold.gld_product_performance;
-
--- Expected ranges (AdventureWorks 2014):
--- Bronze: 30K-35K orders, 19K customers, 500 products
--- Silver: Same as bronze
--- Gold: 1.5K daily summaries, 19K customer metrics, 500 product metrics
-
--- Check 3: Data freshness
-SELECT
-    'Sales Orders' as data_source,
-    MAX(order_date) as latest_date,
-    DATEDIFF(day, MAX(order_date), GETDATE()) as days_old
-FROM silver.slvr_sales_orders;
-
--- Expected: Latest date should be recent (depending on source data)
-
--- Check 4: No null critical fields
-SELECT
-    'Bronze Sales Orders - Null Check' as check_name,
-    COUNT(*) as null_count
-FROM bronze.brnz_sales_orders
-WHERE sales_order_id IS NULL
-   OR order_date IS NULL
-   OR customer_id IS NULL;
-
--- Expected: 0 null values
-
--- Check 5: Data quality metrics
-SELECT
-    customer_segment,
-    COUNT(*) as customer_count,
-    AVG(lifetime_value) as avg_ltv
-FROM silver.slvr_customers
-GROUP BY customer_segment
-ORDER BY customer_count DESC;
-
--- Expected: Reasonable distribution across segments
-```
-
-#### Airflow Health Check
-
-```bash
-# Check Airflow webserver
-curl -f http://localhost:8080/health || echo "Airflow webserver down"
-
-# Check DAG status
-docker exec dataops-airflow-webserver airflow dags list
-# Expected: dbt_dataops_pipeline should be listed
-
-# Check last DAG run
-docker exec dataops-airflow-webserver airflow dags list-runs -d dbt_dataops_pipeline
-# Expected: Recent runs should show "success" state
-
-# Check for failed tasks
-docker exec dataops-airflow-webserver airflow tasks states-for-dag-run dbt_dataops_pipeline <run_id>
-# Expected: All tasks should be "success"
-```
-
-#### DBT Health Check
-
-```bash
-# Check DBT compilation
-docker exec dataops-dbt dbt compile --profiles-dir /usr/app/dbt --target dev
-# Expected: "Compilation completed successfully"
-
-# Check DBT connection
-docker exec dataops-dbt dbt debug --profiles-dir /usr/app/dbt --target dev
-# Expected: All checks should pass
-
-# Check DBT tests
-docker exec dataops-dbt dbt test --profiles-dir /usr/app/dbt --target dev
-# Expected: "Completed successfully"
+# Test data quality
+docker exec dataops-dbt dbt test --target prod --profiles-dir .
 ```
 
 ---
 
-## 🔧 Troubleshooting Guide
+## Health Checks
 
-### Issue 1: DBT Compilation Fails
+### Container Health
 
-**Symptoms**:
-- `dbt compile` fails with syntax error
-- CI/CD pipeline fails at compilation step
+```powershell
+# Check all containers are running
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
-**Diagnosis**:
-```bash
-# Check DBT compilation with verbose logging
-dbt compile --profiles-dir . --target dev --log-level debug
-
-# Common error: Undefined macro
-# Solution: Check packages.yml and run dbt deps
+# Expected:
+# dataops-sqlserver        Up      0.0.0.0:1433->1433/tcp
+# dataops-postgres         Up      0.0.0.0:5432->5432/tcp
+# dataops-airflow-webserver Up     0.0.0.0:8080->8080/tcp
+# dataops-airflow-scheduler Up
+# dataops-dbt              Up
+# cloudbeaver              Up      0.0.0.0:8978->8978/tcp
 ```
 
-**Solution**:
-1. Review error message for specific file and line number
-2. Check SQL syntax in the problematic model
-3. Verify all Jinja macros are properly imported
-4. Ensure `dbt deps` was run to install packages
-5. Clear DBT cache: `dbt clean`
+### Database Health
 
----
+```powershell
+# SQL Server
+docker exec dataops-sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourPassword123! -Q "SELECT @@VERSION"
 
-### Issue 2: Database Connection Fails
+# Postgres
+docker exec dataops-postgres pg_isready -U airflow
 
-**Symptoms**:
-- `dbt debug` fails with connection error
-- "Cannot connect to database" message
-
-**Diagnosis**:
-```bash
-# Test database connection manually
-sqlcmd -S localhost,1433 -U sa -P YourPassword -Q "SELECT @@VERSION"
-
-# Check Docker network
-docker network inspect dataops-project_default
-
-# Check environment variables
-echo $PROD_SQL_SERVER
-echo $PROD_SQL_DATABASE
+# Check AdventureWorks database
+docker exec dataops-sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourPassword123! -Q "SELECT COUNT(*) as table_count FROM AdventureWorks2014.INFORMATION_SCHEMA.TABLES"
 ```
 
-**Solution**:
-1. **Docker environment**: Ensure SQL Server container is running and healthy
-   ```bash
-   docker-compose ps sqlserver
-   docker-compose logs sqlserver
-   ```
+### DBT Health
 
-2. **Production environment**: Verify credentials and network access
-   ```bash
-   # Test from CI/CD runner
-   nslookup $PROD_SQL_SERVER
-   telnet $PROD_SQL_SERVER 1433
-   ```
+```powershell
+# Test DBT connection
+docker exec dataops-dbt dbt debug --target dev --profiles-dir .
 
-3. **Firewall**: Ensure port 1433 is open
-4. **Credentials**: Rotate if expired (common in production)
+# Check DBT models
+docker exec dataops-dbt dbt ls --target dev --profiles-dir .
 
----
-
-### Issue 3: Tests Fail After Deployment
-
-**Symptoms**:
-- `dbt test` fails for specific models
-- Data quality alerts triggered
-
-**Diagnosis**:
-```bash
-# Run specific test with verbose output
-dbt test --select test_name --profiles-dir . --target dev --log-level debug
-
-# Query database to investigate
-# Example: Check for null values
-SELECT COUNT(*)
-FROM silver.slvr_customers
-WHERE customer_id IS NULL;
+# Run smoke test (one model)
+docker exec dataops-dbt dbt run --select brnz_sales_orders --target dev --profiles-dir .
 ```
 
-**Solution**:
-1. **Schema test failure** (unique, not_null, etc.):
-   - Query the table to identify problematic rows
-   - Trace back to source data
-   - Add data cleaning logic in Bronze/Silver layer
+### Airflow Health
 
-2. **Custom test failure**:
-   - Review test logic in `tests/generic/`
-   - Check if test parameters need adjustment
-   - Verify test assumptions are still valid
-
-3. **Relationships test failure**:
-   - Identify orphaned records
-   - Check for source data integrity issues
-   - Consider adding soft deletes handling
-
----
-
-### Issue 4: Airflow DAG Not Running
-
-**Symptoms**:
-- DAG not visible in Airflow UI
-- DAG shows "Import Error"
-- Tasks not executing
-
-**Diagnosis**:
-```bash
-# Check Airflow logs
-docker-compose logs airflow-scheduler
-docker-compose logs airflow-webserver
+```powershell
+# Check Airflow version
+docker exec dataops-airflow-scheduler airflow version
 
 # List DAGs
-docker exec dataops-airflow-webserver airflow dags list
+docker exec dataops-airflow-scheduler airflow dags list
 
-# Check DAG import errors
-docker exec dataops-airflow-webserver airflow dags list-import-errors
+# Check DAG status
+docker exec dataops-airflow-scheduler airflow dags state dbt_dataops_pipeline 2025-12-11
+
+# Test DAG execution (dry run)
+docker exec dataops-airflow-scheduler airflow dags test dbt_dataops_pipeline 2025-12-11
 ```
 
-**Solution**:
-1. **Import Error**:
-   - Check Python syntax in `dbt_pipeline_dag.py`
-   - Verify all imports are available
-   - Ensure DAG file is in correct directory (`airflow/dags/`)
+### UI Accessibility
 
-2. **DAG Paused**:
-   - Unpause in Airflow UI
-   - Or via CLI: `airflow dags unpause dbt_dataops_pipeline`
+```powershell
+# Test Airflow web UI
+Invoke-WebRequest -Uri http://localhost:8080 -UseBasicParsing | Select-Object StatusCode
 
-3. **Schedule Issue**:
-   - Verify cron schedule is correct
-   - Check `start_date` is in the past
-   - Ensure `catchup=False` to avoid backfilling
+# Test CloudBeaver
+Invoke-WebRequest -Uri http://localhost:8978 -UseBasicParsing | Select-Object StatusCode
+
+# Expected: StatusCode = 200 for both
+```
 
 ---
 
-### Issue 5: Slow Performance
+## Troubleshooting
+
+### Issue 1: Containers Won't Start
 
 **Symptoms**:
-- DBT run takes >1 hour (expected: 15-30 min)
-- Database queries timing out
-- Airflow DAG exceeds SLA
+
+- `docker-compose up` fails
+- Containers exit immediately
 
 **Diagnosis**:
-```sql
--- Check query execution stats
-SELECT
-    creation_time,
-    last_execution_time,
-    execution_count,
-    total_elapsed_time / 1000000 as total_elapsed_sec,
-    SUBSTRING(st.text, 1, 200) as query_text
-FROM sys.dm_exec_query_stats qs
-CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) st
-ORDER BY total_elapsed_time DESC;
 
--- Check table sizes
-SELECT
-    t.name as table_name,
-    p.rows as row_count,
-    SUM(a.total_pages) * 8 / 1024 as total_size_mb
-FROM sys.tables t
-INNER JOIN sys.indexes i ON t.object_id = i.object_id
-INNER JOIN sys.partitions p ON i.object_id = p.object_id AND i.index_id = p.index_id
-INNER JOIN sys.allocation_units a ON p.partition_id = a.container_id
-WHERE t.schema_id = SCHEMA_ID('silver')
-GROUP BY t.name, p.rows
-ORDER BY total_size_mb DESC;
+```powershell
+# Check Docker daemon
+docker info
+
+# Check logs
+docker-compose logs
+
+# Check disk space
+Get-PSDrive C
 ```
 
-**Solution**:
-1. **Add indexes** to frequently joined columns:
-   ```sql
-   CREATE INDEX idx_customer_id ON silver.slvr_sales_orders(customer_id);
-   CREATE INDEX idx_product_id ON silver.slvr_sales_orders(product_id);
-   ```
+**Solutions**:
 
-2. **Use incremental models** for large tables:
-   ```sql
-   -- In model config
-   {{ config(
-       materialized='incremental',
-       unique_key='sales_order_id'
-   ) }}
-   ```
+```powershell
+# Free up disk space
+docker system prune -a
 
-3. **Partition large tables** by date:
-   ```sql
-   CREATE PARTITION FUNCTION pf_order_date (DATE)
-   AS RANGE RIGHT FOR VALUES ('2023-01-01', '2024-01-01');
-   ```
+# Reset Docker Desktop (Windows)
+# Settings -> Troubleshoot -> Reset to factory defaults
 
-4. **Optimize Silver/Gold queries**:
-   - Reduce window function usage
-   - Pre-aggregate in Bronze where possible
-   - Use CTEs for complex logic
+# Rebuild containers
+docker-compose down -v
+docker-compose up -d --build
+```
 
 ---
 
-### Issue 6: Rollback Fails
+### Issue 2: SQL Server Connection Failed
 
 **Symptoms**:
-- Rollback workflow fails
-- Cannot restore to previous version
+
+- DBT fails with "Cannot connect to SQL Server"
+- Error: "Login failed for user 'sa'"
 
 **Diagnosis**:
+
+```powershell
+# Check SQL Server container
+docker logs dataops-sqlserver
+
+# Test connection
+docker exec dataops-sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourPassword123! -Q "SELECT 1"
+```
+
+**Solutions**:
+
+```powershell
+# Wait longer (SQL Server needs 30-60s to start)
+Start-Sleep -Seconds 60
+
+# Verify password in profiles.yml matches docker-compose.yml
+cat dbt/profiles.yml
+cat docker-compose.yml
+
+# Restart SQL Server container
+docker restart dataops-sqlserver
+Start-Sleep -Seconds 60
+```
+
+---
+
+### Issue 3: DBT Models Fail
+
+**Symptoms**:
+
+- `dbt run` completes with errors
+- Models not created in database
+
+**Diagnosis**:
+
+```powershell
+# Check DBT logs
+docker logs dataops-dbt
+
+# Run with debug
+docker exec dataops-dbt dbt run --target dev --profiles-dir . --debug
+```
+
+**Solutions**:
+
+```powershell
+# Check SQL syntax in model files
+cat dbt/models/bronze/brnz_sales_orders.sql
+
+# Test individual model
+docker exec dataops-dbt dbt run --select brnz_sales_orders --target dev --profiles-dir .
+
+# Clear cache and rebuild
+docker exec dataops-dbt dbt clean --profiles-dir .
+docker exec dataops-dbt dbt deps --profiles-dir .
+docker exec dataops-dbt dbt run --target dev --profiles-dir .
+```
+
+---
+
+### Issue 4: Airflow DAG Not Showing
+
+**Symptoms**:
+
+- DAG not visible in Airflow UI
+- `airflow dags list` doesn't show pipeline
+
+**Diagnosis**:
+
+```powershell
+# Check DAG file exists
+Test-Path airflow/dags/dbt_pipeline_dag.py
+
+# Check Airflow logs
+docker logs dataops-airflow-scheduler
+
+# Check for Python errors
+docker exec dataops-airflow-scheduler python /opt/airflow/dags/dbt_pipeline_dag.py
+```
+
+**Solutions**:
+
+```powershell
+# Fix Python syntax errors in DAG file
+# Check airflow/dags/dbt_pipeline_dag.py
+
+# Restart scheduler
+docker restart dataops-airflow-scheduler
+
+# Clear Airflow cache
+docker exec dataops-airflow-scheduler airflow dags reserialize
+
+# Check DAG appeared
+Start-Sleep -Seconds 30
+docker exec dataops-airflow-scheduler airflow dags list
+```
+
+---
+
+### Issue 5: Permission Denied Errors
+
+**Symptoms**:
+
+- Airflow logs show "Permission denied"
+- Cannot write to `/opt/airflow/logs`
+
+**Diagnosis**:
+
+```powershell
+# Check permissions
+docker exec dataops-airflow-scheduler ls -la /opt/airflow/logs
+```
+
+**Solutions**:
+
+```powershell
+# Fix permissions
+docker run --rm -v ${PWD}/airflow:/opt/airflow alpine sh -c "chmod -R 777 /opt/airflow/logs /opt/airflow/plugins /opt/airflow/dags"
+
+# Restart Airflow
+docker restart dataops-airflow-scheduler
+docker restart dataops-airflow-webserver
+```
+
+---
+
+### Issue 6: CI/CD Pipeline Fails
+
+**Symptoms**:
+
+- GitHub Actions workflow fails
+- Red X on commit/PR
+
+**Diagnosis**:
+
 ```bash
-# Check rollback workflow logs
-# GitHub Actions → "CD - Rollback Deployment" → View logs
-
-# Verify backup exists
-# GitHub Actions → Artifacts → "deployment-backup-{sha}"
+# Check workflow logs in GitHub:
+# 1. Go to Actions tab
+# 2. Click on failed workflow run
+# 3. Expand failed step
 ```
 
-**Solution**:
-1. **Manual rollback** using git:
-   ```bash
-   # Find last good commit
-   git log --oneline --graph --all
+**Common Solutions**:
 
-   # Checkout and deploy
-   git checkout <good-commit-sha>
-   cd dbt/
-   dbt run --profiles-dir . --target prod --full-refresh
-   ```
+**DBT Parse Error**:
 
-2. **Database restore** (if needed):
-   ```sql
-   -- Restore from backup
-   RESTORE DATABASE [AdventureWorks2014_Backup]
-   FROM DISK = 'C:\Backup\AdventureWorks2014.bak'
-   WITH REPLACE;
-   ```
+```yaml
+# Fix SQL syntax in model files
+# Common issues:
+# - Missing commas in SELECT
+# - Incorrect column names
+# - Invalid Jinja syntax
+```
 
-3. **Contact DBA** if permissions issues
+**Docker Build Fails**:
 
----
+```yaml
+# Check Dockerfile syntax
+# Verify base image is available
+# Check network connectivity in CI runner
+```
 
-## 🚨 Incident Response
+**Self-Hosted Runner Offline**:
 
-### Severity Levels
+```bash
+# On runner machine:
+cd actions-runner
+./run.sh
 
-#### P0 - Critical (Production Down)
-- **Definition**: Production pipeline completely broken, no data flowing
-- **Response Time**: Immediate (within 15 minutes)
-- **Actions**:
-  1. Page on-call engineer immediately
-  2. Initiate rollback immediately
-  3. Notify stakeholders within 15 minutes
-  4. Create incident channel (#incident-YYYYMMDD)
-  5. Start incident timeline documentation
-
-#### P1 - High (Degraded Service)
-- **Definition**: Partial pipeline failure, some data incorrect
-- **Response Time**: Within 1 hour
-- **Actions**:
-  1. Notify on-call engineer
-  2. Assess impact and scope
-  3. Determine rollback vs. hotfix
-  4. Notify affected stakeholders
-
-#### P2 - Medium (Non-Critical Issue)
-- **Definition**: Minor data quality issues, non-blocking
-- **Response Time**: Within 4 hours
-- **Actions**:
-  1. Create bug ticket
-  2. Schedule fix in next sprint
-  3. Add monitoring if needed
-
-#### P3 - Low (Cosmetic Issue)
-- **Definition**: Documentation errors, minor performance issues
-- **Response Time**: Within 1 week
-- **Actions**:
-  1. Add to backlog
-  2. Fix in next maintenance window
-
-### Incident Communication Template
-
-```markdown
-## Incident Summary
-
-**Incident ID**: INC-YYYYMMDD-001
-**Severity**: P0 / P1 / P2 / P3
-**Status**: Investigating / Identified / Monitoring / Resolved
-**Started**: YYYY-MM-DD HH:MM UTC
-**Resolved**: YYYY-MM-DD HH:MM UTC (if resolved)
-
-### Impact
-- **Affected Services**: [e.g., Gold layer, Customer reports]
-- **User Impact**: [e.g., Dashboard showing stale data]
-- **Data Impact**: [e.g., 5,000 records incorrect]
-
-### Timeline
-- **10:00 UTC**: Issue detected via monitoring alert
-- **10:05 UTC**: On-call engineer paged
-- **10:15 UTC**: Root cause identified (DBT test failure)
-- **10:20 UTC**: Rollback initiated
-- **10:35 UTC**: Rollback completed, service restored
-
-### Root Cause
-[Detailed explanation of what went wrong]
-
-### Resolution
-[Steps taken to resolve the issue]
-
-### Prevention
-- [ ] Add regression test
-- [ ] Update deployment checklist
-- [ ] Implement additional monitoring
-- [ ] Team training on X
-
-### Follow-up Actions
-- [ ] Post-incident review scheduled
-- [ ] Update runbook with lessons learned
-- [ ] Implement preventive measures
+# Or as service:
+sudo systemctl restart actions.runner.*
 ```
 
 ---
 
-## 📊 Monitoring & Alerts
+## Monitoring & Alerts
 
 ### Key Metrics to Monitor
 
-1. **Pipeline Health**:
-   - DAG run success rate (target: >99%)
-   - Average execution time (target: <30 minutes)
-   - Test failure rate (target: <1%)
+| Metric           | Threshold   | Check Method     |
+| ---------------- | ----------- | ---------------- |
+| Container Status | All Up      | `docker ps`      |
+| Disk Space       | > 5GB free  | `Get-PSDrive C`  |
+| SQL Server CPU   | < 80%       | Docker stats     |
+| DBT Run Duration | < 5 minutes | Airflow logs     |
+| Test Pass Rate   | 100%        | DBT test results |
+| DAG Success Rate | > 95%       | Airflow UI       |
 
-2. **Data Quality**:
-   - Row count anomalies (alert if >20% change)
-   - Null value percentage (alert if >5%)
-   - Duplicate records (alert if >0)
+### Slack Notifications
 
-3. **Performance**:
-   - Database CPU usage (alert if >80%)
-   - Query execution time (alert if >5 minutes)
-   - Disk space (alert if <20% free)
+**Setup**:
 
-4. **Business Metrics**:
-   - Daily revenue match expected range
-   - Customer count trends
-   - Product performance metrics
+1. Create Slack Incoming Webhook
+2. Add `SLACK_WEBHOOK_URL` to `.env` file
+3. Deploy with updated configuration
 
-### Alert Configuration
+**Notification Events**:
 
-```yaml
-# Example Airflow SLA configuration (already in dbt_pipeline_dag.py)
-DEFAULT_ARGS = {
-    'sla': timedelta(hours=2),
-    'sla_miss_callback': send_failure_notification,
-    'email_on_failure': True,
-    'email': ['dataops-team@example.com']
-}
+- ✅ Successful deployment (dev/prod)
+- ❌ Failed deployment
+- ✅ Successful rollback
+- ❌ Failed rollback
+- ⚠️ DBT test failures
+- ⚠️ Airflow DAG failures
 
-# Example data quality alert (to be implemented)
-alert_config:
-  - name: row_count_anomaly
-    metric: row_count_change_percentage
-    threshold: 20
-    severity: P1
-    notification: slack
+### Log Monitoring
 
-  - name: test_failure
-    metric: test_failure_count
-    threshold: 1
-    severity: P0
-    notification: pagerduty
+**Airflow Logs**:
+
+```powershell
+# Scheduler logs
+docker logs -f dataops-airflow-scheduler
+
+# Webserver logs
+docker logs -f dataops-airflow-webserver
+
+# DAG run logs
+# Available in Airflow UI: http://localhost:8080
+# Navigate to: DAGs -> dbt_dataops_pipeline -> Graph -> Click task -> View Log
 ```
 
-### Monitoring Dashboards
+**DBT Logs**:
 
-1. **Operational Dashboard**:
-   - Real-time DAG status
-   - Recent test results
-   - System health indicators
+```powershell
+# View DBT run logs
+docker exec dataops-dbt cat logs/dbt.log
 
-2. **Data Quality Dashboard**:
-   - Test pass/fail trends
-   - Data freshness metrics
-   - Anomaly detection results
+# Live tail
+docker exec dataops-dbt tail -f logs/dbt.log
+```
 
-3. **Business Metrics Dashboard**:
-   - Daily sales trends
-   - Customer segmentation distribution
-   - Product performance KPIs
+**SQL Server Logs**:
 
----
+```powershell
+# View SQL Server error log
+docker logs dataops-sqlserver
 
-## 📞 Contacts & Escalation
-
-### Team Contacts
-
-| Role | Contact | Responsibility |
-|------|---------|----------------|
-| Data Engineering Lead | lead@example.com | Overall pipeline ownership |
-| On-Call Engineer | oncall@example.com | 24/7 incident response |
-| Database Administrator | dba@example.com | Database issues, performance |
-| DevOps Engineer | devops@example.com | Infrastructure, CI/CD |
-| Business Analyst | analytics@example.com | Data quality validation |
-
-### Escalation Path
-
-1. **Level 1**: On-call Data Engineer (0-30 minutes)
-2. **Level 2**: Data Engineering Lead (30-60 minutes)
-3. **Level 3**: Engineering Manager (1-2 hours)
-4. **Level 4**: CTO (2+ hours, P0 only)
+# Check for connection errors
+docker logs dataops-sqlserver 2>&1 | Select-String "error"
+```
 
 ---
 
-## 📚 Additional Resources
+## Related Documentation
 
-- **Architecture Documentation**: [ARCHITECTURE.md](./ARCHITECTURE.md)
-- **CI/CD Guide**: [CI_CD_GUIDE.md](./CI_CD_GUIDE.md)
-- **Testing Strategy**: [TESTING_STRATEGY.md](./TESTING_STRATEGY.md)
-- **Multi-Environment Setup**: [MULTI_ENVIRONMENT_SETUP.md](./MULTI_ENVIRONMENT_SETUP.md)
-- **Data Lineage**: [DATA_LINEAGE.md](./DATA_LINEAGE.md)
-- **DBT Documentation**: http://localhost:8001 (when running locally)
-- **Airflow UI**: http://localhost:8080 (when running locally)
+- **[ARCHITECTURE_DIAGRAM.md](ARCHITECTURE_DIAGRAM.md)** - System architecture overview
+- **[MULTI_ENVIRONMENT_SETUP.md](MULTI_ENVIRONMENT_SETUP.md)** - Environment configuration details
+- **[TESTING_STRATEGY.md](TESTING_STRATEGY.md)** - Testing approach and data quality
+- **[SELF_HOSTED_RUNNER_SETUP.md](SELF_HOSTED_RUNNER_SETUP.md)** - CI/CD runner setup
 
 ---
 
-## 📝 Runbook Maintenance
-
-This runbook should be updated:
-- After every incident (add lessons learned)
-- When new features are deployed
-- Quarterly review for accuracy
-- When team structure changes
-
-**Last Reviewed**: 2024-01-15
-**Next Review Due**: 2024-04-15
-**Maintained By**: Data Engineering Team
-
----
-
-**Questions or Issues?**
-Create a ticket: https://github.com/your-org/dataops-project/issues
-Slack: #dataops-support
+**Last Updated**: December 2025  
+**Version**: 1.0.0  
+**Maintained By**: DataOps Project Team
