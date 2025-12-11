@@ -51,7 +51,7 @@ Dự án này triển khai một **DataOps pipeline hoàn chỉnh** theo chuẩn
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                         DATAOPS PIPELINE ARCHITECTURE                    │
+│                         DATAOPS PIPELINE ARCHITECTURE                   │
 └─────────────────────────────────────────────────────────────────────────┘
 
                     ┌──────────────────────┐
@@ -61,38 +61,38 @@ Dự án này triển khai một **DataOps pipeline hoàn chỉnh** theo chuẩn
                                │
                                ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                        Docker Compose Environment                         │
+│                        Docker Compose Environment                        │
 ├──────────────────────────────────────────────────────────────────────────┤
-│                                                                           │
-│  ┌─────────────┐    ┌──────────────┐    ┌────────────┐                 │
-│  │ SQL Server  │───▶│     DBT      │───▶│  Schemas:  │                 │
-│  │ (Source DB) │    │ (Transform)  │    │  - Bronze  │                 │
-│  │ AW2014      │    │  Bronze →    │    │  - Silver  │                 │
-│  │             │    │  Silver →    │    │  - Gold    │                 │
-│  │ Port: 1433  │    │  Gold        │    │            │                 │
-│  └─────────────┘    └──────┬───────┘    └────────────┘                 │
+│                                                                          │
+│  ┌─────────────┐    ┌──────────────┐    ┌────────────┐                   │
+│  │ SQL Server  │───▶│     DBT      │───▶│  Schemas: │                   │
+│  │ (Source DB) │    │ (Transform)  │    │  - Bronze  │                   │
+│  │ AW2014      │    │  Bronze →    │    │  - Silver  │                   │
+│  │             │    │  Silver →    │    │  - Gold    │                   │
+│  │ Port: 1433  │    │  Gold        │    │            │                   │
+│  └─────────────┘    └──────┬───────┘    └────────────┘                   │
 │                             │                                            │
 │                             ▼                                            │
 │                    ┌────────────────┐                                    │
 │                    │    Airflow     │                                    │
 │                    │ (Orchestrator) │                                    │
 │                    ├────────────────┤                                    │
-│                    │   Webserver    │◀─── Port: 8080                    │
-│                    │   Scheduler    │     (Admin UI)                    │
-│                    └────────┬───────┘                                    │
-│                             │                                            │
-│                             ▼                                            │
-│                    ┌────────────────┐                                    │
-│                    │   PostgreSQL   │                                    │
-│                    │   (Metadata)   │                                    │
-│                    │  Port: 5432    │                                    │
-│                    └────────────────┘                                    │
+│                    │   Webserver    │◀─── Port: 8080                     │
+│                    │   Scheduler    │     (Admin UI)                      │
+│                    └────────┬───────┘                                     │
+│                             │                                             │
+│                             ▼                                             │
+│                    ┌────────────────┐                                     │
+│                    │   PostgreSQL   │                                     │
+│                    │   (Metadata)   │                                     │
+│                    │  Port: 5432    │                                     │
+│                    └────────────────┘                                     │
 │                                                                           │
-│  ┌─────────────────────────────────────────────────┐                    │
-│  │          CloudBeaver (Optional)                 │                    │
-│  │          SQL Server Web UI                      │                    │
-│  │          Port: 8978                             │                    │
-│  └─────────────────────────────────────────────────┘                    │
+│  ┌─────────────────────────────────────────────────┐                      │
+│  │          CloudBeaver (Optional)                 │                      │
+│  │          SQL Server Web UI                      │                      │
+│  │          Port: 8978                             │                      │
+│  └─────────────────────────────────────────────────┘                      │
 │                                                                           │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
@@ -101,7 +101,7 @@ Dự án này triển khai một **DataOps pipeline hoàn chỉnh** theo chuẩn
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ STAGE 1: SOURCE DATA (SQL Server AdventureWorks2014)               │
+│ STAGE 1: SOURCE DATA (SQL Server AdventureWorks2014)                │
 ├─────────────────────────────────────────────────────────────────────┤
 │ Tables:                                                             │
 │ • Sales.SalesOrderHeader                                            │
@@ -114,50 +114,50 @@ Dự án này triển khai một **DataOps pipeline hoàn chỉnh** theo chuẩn
                        │
                        ▼ DBT Extract & Clean
 ┌─────────────────────────────────────────────────────────────────────┐
-│ STAGE 2: BRONZE LAYER (Staging - Cleaned Raw Data)                 │
+│ STAGE 2: BRONZE LAYER (Staging - Cleaned Raw Data)                  │
 ├─────────────────────────────────────────────────────────────────────┤
-│ Models: (Materialized as VIEWS)                                    │
-│ • brnz_sales_orders    - Denormalized sales data                   │
-│ • brnz_customers       - Customer master data                      │
-│ • brnz_products        - Product master data                       │
+│ Models: (Materialized as VIEWS)                                     │
+│ • brnz_sales_orders    - Denormalized sales data                    │
+│ • brnz_customers       - Customer master data                       │
+│ • brnz_products        - Product master data                        │
 │                                                                     │
 │ Transformations:                                                    │
-│ • Column standardization (snake_case)                              │
-│ • Data type conversions                                            │
-│ • Basic filtering (invalid records)                                │
-│ • Add calculated fields                                            │
+│ • Column standardization (snake_case)                               │
+│ • Data type conversions                                             │
+│ • Basic filtering (invalid records)                                 │
+│ • Add calculated fields                                             │
 └──────────────────────┬──────────────────────────────────────────────┘
                        │
                        ▼ DBT Business Logic
 ┌─────────────────────────────────────────────────────────────────────┐
-│ STAGE 3: SILVER LAYER (Business Logic)                             │
+│ STAGE 3: SILVER LAYER (Business Logic)                              │
 ├─────────────────────────────────────────────────────────────────────┤
-│ Models: (Materialized as TABLES)                                   │
-│ • slvr_sales_orders    - Enriched orders with metrics              │
-│ • slvr_customers       - Customer lifetime value                   │
-│ • slvr_products        - Product performance metrics               │
+│ Models: (Materialized as TABLES)                                    │
+│ • slvr_sales_orders    - Enriched orders with metrics               │
+│ • slvr_customers       - Customer lifetime value                    │
+│ • slvr_products        - Product performance metrics                │
 │                                                                     │
 │ Transformations:                                                    │
-│ • Join multiple bronze models                                      │
-│ • Calculate business metrics                                       │
-│ • Apply business rules                                             │
-│ • Data enrichment                                                  │
+│ • Join multiple bronze models                                       │
+│ • Calculate business metrics                                        │
+│ • Apply business rules                                              │
+│ • Data enrichment                                                   │
 └──────────────────────┬──────────────────────────────────────────────┘
                        │
                        ▼ DBT Aggregations
 ┌─────────────────────────────────────────────────────────────────────┐
-│ STAGE 4: GOLD LAYER (Analytics-Ready Marts)                        │
+│ STAGE 4: GOLD LAYER (Analytics-Ready Marts)                         │
 ├─────────────────────────────────────────────────────────────────────┤
-│ Models: (Materialized as TABLES)                                   │
-│ • gld_sales_summary       - Daily sales metrics                    │
-│ • gld_customer_metrics    - Customer segmentation                  │
-│ • gld_product_performance - Product analytics                      │
+│ Models: (Materialized as TABLES)                                    │
+│ • gld_sales_summary       - Daily sales metrics                     │
+│ • gld_customer_metrics    - Customer segmentation                   │
+│ • gld_product_performance - Product analytics                       │
 │                                                                     │
 │ Transformations:                                                    │
-│ • Time-based aggregations                                          │
-│ • KPI calculations                                                 │
-│ • Business-ready dimensions                                        │
-│ • Pre-calculated metrics                                           │
+│ • Time-based aggregations                                           │
+│ • KPI calculations                                                  │
+│ • Business-ready dimensions                                         │
+│ • Pre-calculated metrics                                            │
 └──────────────────────┬──────────────────────────────────────────────┘
                        │
                        ▼
@@ -566,7 +566,7 @@ dataops-project/
 │   ├── dbt_project.yml
 │   ├── profiles.yml
 │   └── sources.yml
-├── docs/                   # 10+ documentation files
+├── docs/
 │   ├── ARCHITECTURE.md
 │   ├── ARCHITECTURE_DIAGRAM.md
 │   ├── CI_CD_GUIDE.md
@@ -577,7 +577,7 @@ dataops-project/
 │   ├── MULTI_ENVIRONMENT_SETUP.md
 │   └── TESTING_STRATEGY.md
 ├── docker-compose.yml      # 5 services orchestration
-└── README.md              # This file
+└── README.md
 ```
 
 **Total Files**: 60+ files | **Lines of Code**: 6,000+ lines
@@ -722,7 +722,7 @@ This project demonstrates mastery of:
    - SLA monitoring
 
 5. **Documentation**:
-   - Comprehensive guides (10+ documents)
+   - Comprehensive guides
    - Architecture diagrams
    - Operational runbooks
 
@@ -743,11 +743,11 @@ This project demonstrates mastery of:
 
 ### Project Team (3 Members)
 
-| Member       | Responsibilities                | Key Deliverables                                                                  |
-| ------------ | ------------------------------- | --------------------------------------------------------------------------------- |
-| **Member 1** | DBT Models & Data Architecture  | • 9 DBT models<br>• Source definitions<br>• Data lineage documentation            |
-| **Member 2** | Airflow Orchestration & Testing | • DAG implementation<br>• 50+ data quality tests<br>• Testing strategy            |
-| **Member 3** | CI/CD Pipeline & Infrastructure | • 5 GitHub Actions workflows<br>• Docker compose setup<br>• Deployment automation |
+| Member             | Responsibilities                | Key Deliverables                                                                  |
+| ------------------ | ------------------------------- | --------------------------------------------------------------------------------- |
+| **Trần Ngọc Nhân** | DBT Models & Data Architecture  | • 9 DBT models<br>• Source definitions<br>• Data lineage documentation            |
+| **Cao Tiến Minh**  | Airflow Orchestration & Testing | • DAG implementation<br>• 50+ data quality tests<br>• Testing strategy            |
+| **Lê Phúc Thuận**  | CI/CD Pipeline & Infrastructure | • 5 GitHub Actions workflows<br>• Docker compose setup<br>• Deployment automation |
 
 **Collaborative Work**: Architecture design, code reviews, documentation, presentations
 
@@ -786,49 +786,6 @@ Tất cả documentation có thể tìm thấy trong thư mục [`docs/`](docs/)
 
 ---
 
-## 📝 License & Academic Integrity
-
-This project is for **educational purposes only** - Final Year University Project.
-
-**Course**: Data Engineering / DataOps  
-**Level**: Final Year Undergraduate  
-**Duration**: 3 weeks  
-**Grade Weight**: 100 points
-
-### Academic Integrity Statement
-
-- ✅ All code is original work by the team
-- ✅ Official documentation and tutorials used as reference
-- ✅ AI tools used for learning and debugging (properly disclosed)
-- ✅ No code copied from other teams
-- ✅ Proper attribution for all external resources
-
----
-
-## 📈 Project Statistics
-
-| Category          | Metric           | Value                     |
-| ----------------- | ---------------- | ------------------------- |
-| **Development**   | Duration         | 3 weeks                   |
-|                   | Team Size        | 3 students                |
-|                   | Total Commits    | 150+                      |
-|                   | Pull Requests    | 30+                       |
-| **Code**          | Total Files      | 60+ files                 |
-|                   | Lines of Code    | 5,000+ lines              |
-|                   | DBT Models       | 9 models                  |
-|                   | SQL Queries      | 2,500+ lines              |
-| **Testing**       | Test Cases       | 50+ tests                 |
-|                   | Test Coverage    | 100% models               |
-|                   | CI/CD Workflows  | 5 workflows               |
-| **Performance**   | Pipeline Runtime | ~20 minutes               |
-|                   | Test Execution   | ~3 minutes                |
-|                   | Build Time       | ~5 minutes                |
-| **Documentation** | Doc Files        | 6 comprehensive guides    |
-|                   | Doc Pages        | 2,000+ lines              |
-|                   | Diagrams         | 10+ architecture diagrams |
-
----
-
 ## 🏆 Project Achievements
 
 ### Requirements Met
@@ -844,7 +801,6 @@ This project is for **educational purposes only** - Final Year University Projec
 - 🎯 **Multi-environment support** (dev/prod/ci)
 - 🎯 **Complete data lineage** tracking
 - 🎯 **Automated CI/CD pipeline** with 5 workflows
-- 🎯 **Comprehensive documentation** (2,000+ lines)
 
 ### Innovation Points
 
@@ -867,41 +823,11 @@ This project is for **educational purposes only** - Final Year University Projec
 
 ---
 
-## 📞 Support & Feedback
-
-### Getting Help
-
-- 📖 **Documentation**: Check the [`docs/`](docs/) folder for detailed guides
-- 🐛 **Issues**: Report bugs or request features via GitHub Issues
-- 💬 **Questions**: Open a Discussion on GitHub
-
-### Project Repository
-
-- **GitHub**: [https://github.com/tienminhktvn/dataops-project](https://github.com/tienminhktvn/dataops-project)
-- **Issues**: [Report Issues](https://github.com/tienminhktvn/dataops-project/issues)
-
----
-
-## 🌟 Next Steps & Future Enhancements
-
-### Potential Improvements
-
-- [ ] Add Grafana for metrics visualization
-- [ ] Implement dbt Semantic Layer
-- [ ] Add Great Expectations for advanced data quality
-- [ ] Implement incremental models for large datasets
-- [ ] Add dbt snapshots for slowly changing dimensions
-- [ ] Integrate with cloud data warehouse (Snowflake/BigQuery)
-
 ### Learning Resources
 
 - **DBT Learn**: https://courses.getdbt.com/
 - **Airflow Tutorials**: https://airflow.apache.org/docs/apache-airflow/stable/tutorial.html
 - **DataOps Best Practices**: https://dataops.wiki/
-
----
-
-**⭐ If you find this project helpful, please consider giving it a star on GitHub!**
 
 ---
 
