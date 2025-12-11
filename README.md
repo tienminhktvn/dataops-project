@@ -459,8 +459,8 @@ docker exec dataops-airflow-webserver airflow dags list-runs -d dbt_transform
 - ✅ **README.md** (2 points): Complete setup guide
 - ✅ **Architecture Documentation** (3 points):
   - [ARCHITECTURE_DIAGRAM.md](docs/ARCHITECTURE_DIAGRAM.md) - System design
-  - [CI_CD_GUIDE.md](docs/CI_CD_GUIDE.md) - Pipeline documentation
-  - [FILE_STRUCTURE.md](docs/FILE_STRUCTURE.md) - Project organization
+  - [DEPLOYMENT_RUNBOOK.md](docs/DEPLOYMENT_RUNBOOK.md) - Operations guide
+  - [MULTI_ENVIRONMENT_SETUP.md](docs/MULTI_ENVIRONMENT_SETUP.md) - Environment config
 
 ### Bonus Features (+15 points) ✅
 
@@ -486,7 +486,7 @@ docker exec dataops-airflow-webserver airflow dags list-runs -d dbt_transform
 
 - [DEPLOYMENT_RUNBOOK.md](docs/DEPLOYMENT_RUNBOOK.md) - Operational procedures
 - [ARCHITECTURE_DIAGRAM.md](docs/ARCHITECTURE_DIAGRAM.md) - Visual system diagrams
-- [DATA_QUALITY.md](docs/DATA_QUALITY.md) - Quality framework
+- [SELF_HOSTED_RUNNER_SETUP.md](docs/SELF_HOSTED_RUNNER_SETUP.md) - Runner setup guide
 
 ---
 
@@ -566,14 +566,11 @@ dataops-project/
 │   ├── profiles.yml
 │   └── sources.yml
 ├── docs/
-│   ├── ARCHITECTURE.md
 │   ├── ARCHITECTURE_DIAGRAM.md
-│   ├── CI_CD_GUIDE.md
 │   ├── DATA_LINEAGE.md
-│   ├── DATA_QUALITY.md
 │   ├── DEPLOYMENT_RUNBOOK.md
-│   ├── FILE_STRUCTURE.md
 │   ├── MULTI_ENVIRONMENT_SETUP.md
+│   ├── SELF_HOSTED_RUNNER_SETUP.md
 │   └── TESTING_STRATEGY.md
 ├── docker-compose.yml      # 5 services orchestration
 └── README.md
@@ -587,19 +584,15 @@ dataops-project/
 
 ### Core Documentation
 
-- [Architecture Overview](docs/ARCHITECTURE.md) - System design and components
-- [CI/CD Guide](docs/CI_CD_GUIDE.md) - Pipeline workflows and usage
-- [Deployment Runbook](docs/DEPLOYMENT_RUNBOOK.md) - Operations manual
+- [Architecture Diagrams](docs/ARCHITECTURE_DIAGRAM.md) - System design and components
+- [Deployment Runbook](docs/DEPLOYMENT_RUNBOOK.md) - Operations manual and troubleshooting
+- [Testing Strategy](docs/TESTING_STRATEGY.md) - Comprehensive testing approach
 
 ### Advanced Features
 
-- [Multi-Environment Setup](docs/MULTI_ENVIRONMENT_SETUP.md) - Dev/Staging/Prod configuration
+- [Multi-Environment Setup](docs/MULTI_ENVIRONMENT_SETUP.md) - Dev/CI/Prod configuration
 - [Data Lineage](docs/DATA_LINEAGE.md) - End-to-end data tracking
-- [Testing Strategy](docs/TESTING_STRATEGY.md) - Comprehensive testing approach
-
-### Visual Diagrams
-
-- [Architecture Diagrams](docs/ARCHITECTURE_DIAGRAM.md) - Mermaid diagrams of entire system
+- [Self-Hosted Runner Setup](docs/SELF_HOSTED_RUNNER_SETUP.md) - CI/CD runner configuration
 
 ### Access Points
 
