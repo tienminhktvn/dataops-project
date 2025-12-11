@@ -31,17 +31,16 @@ This project implements a complete DataOps pipeline following industry standards
 
 ### 📊 Project Statistics
 
-| Metric                  | Value                                   |
-| ----------------------- | --------------------------------------- |
-| **DBT Models**          | 9 models (3 Bronze, 3 Silver, 3 Gold)   |
-| **Source Tables**       | 6 AdventureWorks tables                 |
-| **Data Tests**          | 50+ tests (schema + custom + freshness) |
-| **Test Coverage**       | 100% models có tests                    |
-| **CI Workflows**        | 3 workflows (test, lint, PR validation) |
-| **CD Workflows**        | 2 workflows (deploy, rollback)          |
-| **Environments**        | 3 (dev, prod, ci)                       |
-| **Documentation**       | 6 comprehensive guides                  |
-| **Total Lines of Code** | 5,000+ lines                            |
+| Metric            | Value                                   |
+| ----------------- | --------------------------------------- |
+| **DBT Models**    | 9 models (3 Bronze, 3 Silver, 3 Gold)   |
+| **Source Tables** | 6 AdventureWorks tables                 |
+| **Data Tests**    | 50+ tests (schema + custom + freshness) |
+| **Test Coverage** | 100% models có tests                    |
+| **CI Workflows**  | 3 workflows (test, lint, PR validation) |
+| **CD Workflows**  | 2 workflows (deploy, rollback)          |
+| **Environments**  | 3 (dev, prod, ci)                       |
+| **Documentation** | 6 comprehensive guides                  |
 
 ---
 
