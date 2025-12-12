@@ -1,0 +1,83 @@
+# =============================================================================
+# Docker Ignore File - Exclude Unnecessary Files from Docker Context
+# =============================================================================
+
+# Python Cache Files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+
+# Distribution / Packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# DBT Generated Files
+dbt/target/
+dbt/dbt_packages/
+dbt/dbt_modules/
+dbt/logs/
+**/.user.yml
+
+# Airflow Generated Files
+airflow/logs/
+airflow/*.pid
+airflow/*.err
+airflow/*.log
+
+# Version Control
+.git/
+.gitignore
+.github/
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment & Secrets
+.env
+.env.*
+*.env
+.env.local
+
+# Documentation
+*.md
+docs/
+README*
+LICENSE
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Backup Files
+backup/
+*.bak
+*.backup
+
+# Data Files (if not needed in containers)
+postgres_data/
+sqlserver_data/
+cloudbeaver_data/

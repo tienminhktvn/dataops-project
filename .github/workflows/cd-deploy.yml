@@ -65,6 +65,20 @@ jobs:
 
     steps:
       # -----------------------------------------------------------------------
+      # Pre-Checkout Cleanup (Fix Permission Issues)
+      # -----------------------------------------------------------------------
+      - name: Pre-Cleanup Python Cache Files
+        run: |
+          echo "🧹 Removing Python cache files before checkout..."
+          
+          # Remove Python cache files that cause permission issues
+          sudo find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          sudo find . -type f -name "*.pyc" -exec rm -f {} + 2>/dev/null || true
+          sudo find . -type f -name "*.pyo" -exec rm -f {} + 2>/dev/null || true
+          
+          echo "✅ Cache files removed"
+
+      # -----------------------------------------------------------------------
       # Cleanup & Prepare
       # -----------------------------------------------------------------------
       - name: Clean Workspace
@@ -105,7 +119,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
         with:
-          clean: true
+          clean: false
 
       - name: Create Backup Metadata
         if: needs.determine-env.outputs.env_name == 'prod'
