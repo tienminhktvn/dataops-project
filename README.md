@@ -10,6 +10,10 @@
 
 > **Production-grade DataOps pipeline với automated CI/CD, testing, và monitoring**
 
+## 🎥 Demo Video
+
+📺 **[Xem video demo project tại đây](https://youtu.be/2FijC5sb7m4)**
+
 ---
 
 ## 📋 Project Overview
@@ -441,10 +445,18 @@ docker exec dataops-airflow-webserver airflow dags list-runs -d dbt_transform
   - Impact analysis capabilities
 
 - ✅ **Advanced Testing Strategy** (+5 points):
+
   - [TESTING_STRATEGY.md](docs/TESTING_STRATEGY.md)
   - Property-based testing
   - Data contracts & mutation testing
   - 85%+ test coverage
+
+- ✅ **Video Demo** (+5 points):
+  - 5-10 minute recorded demonstration
+  - Complete pipeline execution walkthrough
+  - Explanation of key system components
+  - CI/CD workflow demonstration
+  - 🎥 [Watch Demo Video](https://youtu.be/2FijC5sb7m4)
 
 ### Additional Documentation 📚
 
@@ -466,7 +478,8 @@ docker exec dataops-airflow-webserver airflow dags list-runs -d dbt_transform
 | Multi-Environment | -           | 5            | 5       | ✅ Complete     |
 | Data Lineage      | -           | 5            | 5       | ✅ Complete     |
 | Advanced Testing  | -           | 5            | 5       | ✅ Complete     |
-| **TOTAL**         | **100**     | **15**       | **115** | **✅ Complete** |
+| Video Demo        | -           | 5            | 5       | ✅ Complete     |
+| **TOTAL**         | **100**     | **20**       | **120** | **✅ Complete** |
 
 ---
 
