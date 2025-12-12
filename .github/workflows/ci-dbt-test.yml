@@ -6,7 +6,6 @@ name: CI - DBT Test
 on:
   pull_request:
     branches: [main, develop]
-    paths: [dbt/**, .github/workflows/ci-dbt-test.yml]
   workflow_dispatch:
 
 concurrency:
