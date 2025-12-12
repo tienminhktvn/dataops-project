@@ -70,12 +70,12 @@ jobs:
       - name: Pre-Cleanup Python Cache Files
         run: |
           echo "🧹 Removing Python cache files before checkout..."
-          
+
           # Remove Python cache files that cause permission issues
           sudo find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
           sudo find . -type f -name "*.pyc" -exec rm -f {} + 2>/dev/null || true
           sudo find . -type f -name "*.pyo" -exec rm -f {} + 2>/dev/null || true
-          
+
           echo "✅ Cache files removed"
 
       # -----------------------------------------------------------------------
