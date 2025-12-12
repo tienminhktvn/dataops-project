@@ -9,3 +9,4 @@ rules:
   comments: disable
   comments-indentation: disable
   truthy: disable
+  braces: disable

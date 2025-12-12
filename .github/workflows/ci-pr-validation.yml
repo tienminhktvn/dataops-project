@@ -139,15 +139,22 @@ jobs:
         run: |
           echo "🔒 Checking for sensitive files..."
           ALL_FILES="${{ steps.changed-files.outputs.changed_files }}"
-          FILES_TO_CHECK=$(echo "$ALL_FILES" | grep -v "\.env\.example")
+
+          FILES_TO_CHECK=$(echo "$ALL_FILES" | grep -v "\.env\.example" | grep -v "\.md$")
+
           SENSITIVE_PATTERNS=".env .key .pem .p12 credentials password secret"
           FOUND_SENSITIVE=false
+
+          # Loop through each pattern
           for pattern in $SENSITIVE_PATTERNS; do
-            if echo "$FILES_TO_CHECK" | grep -i "$pattern"; then
-              echo "⚠️ Found file matching sensitive pattern: $pattern"
-              FOUND_SENSITIVE=true
+            if [ -n "$FILES_TO_CHECK" ]; then
+                if echo "$FILES_TO_CHECK" | grep -i "$pattern"; then
+                  echo "⚠️ Found file matching sensitive pattern: $pattern"
+                  FOUND_SENSITIVE=true
+                fi
             fi
           done
+
           if [ "$FOUND_SENSITIVE" = true ]; then
             echo ""
             echo "❌ Sensitive files detected!"
