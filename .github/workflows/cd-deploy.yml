@@ -121,6 +121,15 @@ jobs:
         with:
           clean: false
 
+      - name: Create .env file
+        run: |
+          echo "🔧 Creating .env file..."
+          cat > .env << 'EOF'
+          # Environment variables for docker-compose
+          SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
+          EOF
+          echo "✅ .env created at $(pwd)/.env"
+
       - name: Create Backup Metadata
         if: needs.determine-env.outputs.env_name == 'prod'
         run: |
