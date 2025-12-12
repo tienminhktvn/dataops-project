@@ -69,28 +69,33 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Clean Workspace
         run: |
-          echo "🧹 Cleaning workspace..."
-          # Stop containers first to release file locks
-          docker compose down 2>/dev/null || true
+          echo "🧹 Force cleaning workspace..."
 
-          # Fix permissions on problematic directories
-          if [ -d "dbt/dbt_packages" ]; then
-            echo "Fixing dbt_packages permissions..."
-            sudo chmod -R 777 dbt/dbt_packages 2>/dev/null || true
-            sudo rm -rf dbt/dbt_packages 2>/dev/null || true
-          fi
+          # Force stop and remove all containers
+          docker compose down --remove-orphans 2>/dev/null || true
+          docker stop $(docker ps -aq) 2>/dev/null || true
 
-          if [ -d "dbt/target" ]; then
-            echo "Fixing target permissions..."
-            sudo chmod -R 777 dbt/target 2>/dev/null || true
-            sudo rm -rf dbt/target 2>/dev/null || true
-          fi
+          # Wait for containers to fully stop
+          echo "⏳ Waiting 5s for containers to stop..."
+          sleep 5
 
-          if [ -d "dbt/logs" ]; then
-            echo "Fixing logs permissions..."
-            sudo chmod -R 777 dbt/logs 2>/dev/null || true
-            sudo rm -rf dbt/logs 2>/dev/null || true
-          fi
+          # Kill any remaining DBT/Python processes
+          pkill -9 dbt 2>/dev/null || true
+          pkill -9 python 2>/dev/null || true
+
+          # Force remove directories with sudo
+          echo "🗑️ Removing old files..."
+          for dir in dbt/dbt_packages dbt/target dbt/logs airflow/logs; do
+            if [ -d "$dir" ]; then
+              echo "  Removing $dir"
+              sudo chmod -R 777 "$dir" 2>/dev/null || true
+              sudo rm -rf "$dir" 2>/dev/null || true
+            fi
+          done
+
+          # Recreate necessary directories
+          mkdir -p dbt/logs airflow/logs
+          sudo chmod 777 dbt/logs airflow/logs
 
           echo "✅ Workspace cleaned"
 
