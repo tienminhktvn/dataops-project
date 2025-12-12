@@ -139,15 +139,22 @@ jobs:
         run: |
           echo "🔒 Checking for sensitive files..."
           ALL_FILES="${{ steps.changed-files.outputs.changed_files }}"
-          FILES_TO_CHECK=$(echo "$ALL_FILES" | grep -v "\.env\.example")
+
+          FILES_TO_CHECK=$(echo "$ALL_FILES" | grep -v "\.env\.example" | grep -v "\.md$")
+
           SENSITIVE_PATTERNS=".env .key .pem .p12 credentials password secret"
           FOUND_SENSITIVE=false
+
+          # Loop through each pattern
           for pattern in $SENSITIVE_PATTERNS; do
-            if echo "$FILES_TO_CHECK" | grep -i "$pattern"; then
-              echo "⚠️ Found file matching sensitive pattern: $pattern"
-              FOUND_SENSITIVE=true
+            if [ -n "$FILES_TO_CHECK" ]; then
+                if echo "$FILES_TO_CHECK" | grep -i "$pattern"; then
+                  echo "⚠️ Found file matching sensitive pattern: $pattern"
+                  FOUND_SENSITIVE=true
+                fi
             fi
           done
+
           if [ "$FOUND_SENSITIVE" = true ]; then
             echo ""
             echo "❌ Sensitive files detected!"
@@ -244,3 +251,177 @@ jobs:
           echo "**PR:**  #${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
           echo "**Author:** @${{ github.event.pull_request.user.login }}" >> $GITHUB_STEP_SUMMARY
           echo "**Branch:** ${{ github.head_ref }} → ${{ github.base_ref }}" >> $GITHUB_STEP_SUMMARY
+
+      # -----------------------------------------------------------------------
+      # Slack Notification
+      # -----------------------------------------------------------------------
+      - name: Slack Notification - Success
+        if: success()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "✅ PR Validation Passed",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "✅ PR Validation Passed",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\n${{ github.repository }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*PR:*\n#${{ github.event.pull_request.number }} - ${{ github.event.pull_request.title }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Author:*\n@${{ github.event.pull_request.user.login }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n${{ github.head_ref }} → ${{ github.base_ref }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*PR Title:* ${{ needs.validate-pr-title.result }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Merge Conflicts:* ${{ needs.check-merge-conflicts.result }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*File Sizes:* ${{ needs.check-file-sizes.result }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Changed Files:* ${{ needs.validate-changed-files.result }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View PR"
+                      },
+                      "url": "${{ github.event.pull_request.html_url }}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Workflow"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+      - name: Slack Notification - Failure
+        if: failure() || needs.validate-pr-title.result == 'failure' || needs.check-merge-conflicts.result == 'failure' || needs.check-file-sizes.result == 'failure' || needs.validate-changed-files.result == 'failure'
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "❌ PR Validation Failed",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "❌ PR Validation Failed",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\n${{ github.repository }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*PR:*\n#${{ github.event.pull_request.number }} - ${{ github.event.pull_request.title }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Author:*\n@${{ github.event.pull_request.user.login }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n${{ github.head_ref }} → ${{ github.base_ref }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*PR Title:* ${{ needs.validate-pr-title.result }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Merge Conflicts:* ${{ needs.check-merge-conflicts.result }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*File Sizes:* ${{ needs.check-file-sizes.result }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Changed Files:* ${{ needs.validate-changed-files.result }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View PR"
+                      },
+                      "url": "${{ github.event.pull_request.html_url }}",
+                      "style": "danger"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Workflow"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK

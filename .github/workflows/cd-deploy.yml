@@ -6,8 +6,8 @@ name: CD - Deploy Pipeline
 on:
   push:
     branches:
-      - main # Production Environment
-      - develop # Development Environment
+      - main
+      - develop
     paths:
       - dbt/**
       - airflow/**
@@ -65,7 +65,7 @@ jobs:
 
     steps:
       # -----------------------------------------------------------------------
-      # Code Update & Backup
+      # Code Update
       # -----------------------------------------------------------------------
       - name: Checkout Code
         uses: actions/checkout@v3
