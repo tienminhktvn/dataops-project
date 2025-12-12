@@ -6,8 +6,8 @@ name: CD - Deploy Pipeline
 on:
   push:
     branches:
-      - main # Production Environment
-      - develop # Development Environment
+      - main
+      - develop
     paths:
       - dbt/**
       - airflow/**
