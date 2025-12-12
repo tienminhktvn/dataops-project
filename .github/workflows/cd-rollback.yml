@@ -31,10 +31,28 @@ jobs:
       target_sha: ${{ steps.determine-sha.outputs.target_sha }}
       can_rollback: ${{ steps.validate.outputs.can_rollback }}
     steps:
+      - name: Clean Workspace
+        run: |
+          echo "🧹 Cleaning workspace..."
+          docker compose down 2>/dev/null || true
+
+          if [ -d "dbt/dbt_packages" ]; then
+            sudo chmod -R 777 dbt/dbt_packages 2>/dev/null || true
+            sudo rm -rf dbt/dbt_packages 2>/dev/null || true
+          fi
+
+          if [ -d "dbt/target" ]; then
+            sudo chmod -R 777 dbt/target 2>/dev/null || true
+            sudo rm -rf dbt/target 2>/dev/null || true
+          fi
+
+          echo "✅ Workspace cleaned"
+
       - name: Checkout code
         uses: actions/checkout@v3
         with:
           fetch-depth: 50
+          clean: true
 
       - name: Determine target SHA
         id: determine-sha
@@ -69,11 +87,33 @@ jobs:
     needs: [validate-rollback]
     if: needs.validate-rollback.outputs.can_rollback == 'true'
     steps:
+      - name: Clean Workspace
+        run: |
+          echo "🧹 Cleaning workspace for rollback..."
+          docker compose down 2>/dev/null || true
+
+          if [ -d "dbt/dbt_packages" ]; then
+            sudo chmod -R 777 dbt/dbt_packages 2>/dev/null || true
+            sudo rm -rf dbt/dbt_packages 2>/dev/null || true
+          fi
+
+          if [ -d "dbt/target" ]; then
+            sudo chmod -R 777 dbt/target 2>/dev/null || true
+            sudo rm -rf dbt/target 2>/dev/null || true
+          fi
+
+          if [ -d "dbt/logs" ]; then
+            sudo chmod -R 777 dbt/logs 2>/dev/null || true
+            sudo rm -rf dbt/logs 2>/dev/null || true
+          fi
+
+          echo "✅ Workspace cleaned"
+
       - name: Checkout target commit
         uses: actions/checkout@v3
         with:
           ref: ${{ needs.validate-rollback.outputs.target_sha }}
-          clean: false
+          clean: true
 
       # Inject Secret for Airflow containers
       - name: Create .env file with Secret
@@ -208,3 +248,26 @@ jobs:
 
           # 3. Send Request
           curl -X POST -H 'Content-type: application/json' --data "$PAYLOAD" ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # ===========================================================================
+  # Post-Rollback Cleanup
+  # ===========================================================================
+  cleanup:
+    name: Cleanup
+    runs-on: self-hosted
+    needs: [execute-rollback]
+    if: always()
+    steps:
+      - name: Fix Permissions
+        run: |
+          echo "🧹 Fixing permissions for next run..."
+          if [ -d "dbt/dbt_packages" ]; then
+            sudo chmod -R 777 dbt/dbt_packages || true
+          fi
+          if [ -d "dbt/target" ]; then
+            sudo chmod -R 777 dbt/target || true
+          fi
+          if [ -d "dbt/logs" ]; then
+            sudo chmod -R 777 dbt/logs || true
+          fi
+          echo "✅ Cleanup complete"
