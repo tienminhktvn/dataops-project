@@ -1,0 +1,50 @@
+---
+# =============================================================================
+# DBT PACKAGES CONFIGURATION
+# =============================================================================
+packages:
+  # ---------------------------------------------------------------------------
+  # DBT UTILS - Essential utilities and macros
+  # ---------------------------------------------------------------------------
+  # Provides:
+  # - union_relations(): Combine multiple tables
+  # - generate_surrogate_key(): Create surrogate keys
+  # - date_spine(): Generate date dimensions
+  # - pivot(): Pivot tables
+  # - star(): Select all columns except specified
+  # - unique_combination_of_columns test
+  # - recency test
+  # - equality test
+  - package: dbt-labs/dbt_utils
+    version: 1.1.1
+
+  # ---------------------------------------------------------------------------
+  # DBT EXPECTATIONS - Data quality tests
+  # ---------------------------------------------------------------------------
+  # Provides advanced data quality tests inspired by Great Expectations:
+  # - expect_column_values_to_be_between
+  # - expect_column_values_to_match_regex
+  # - expect_column_values_to_be_in_set
+  # - expect_table_row_count_to_be_between
+  # - package: calogica/dbt_expectations
+  #   version: 0.10.0
+
+  # ---------------------------------------------------------------------------
+  # CODEGEN - Code generation utilities
+  # ---------------------------------------------------------------------------
+  # Provides macros to generate boilerplate code:
+  # - generate_source(): Generate source YAML from database
+  # - generate_base_model(): Generate base models
+  # - generate_model_yaml(): Generate model documentation
+  # - package: dbt-labs/codegen
+  #   version: 0.12.0
+
+  # ---------------------------------------------------------------------------
+  # AUDIT HELPER - Auditing and comparison utilities
+  # ---------------------------------------------------------------------------
+  # Provides macros for data validation and comparison:
+  # - compare_relations(): Compare two tables
+  # - compare_queries(): Compare query results
+  # Useful for validating migrations and refactoring
+  # - package: dbt-labs/audit_helper
+  #   version: 0.9.0
