@@ -40,7 +40,7 @@ with validation as (
     select
         {{ column_name }} as date_value,
         count(*) as invalid_count,
-        getdate() as current_date
+        getdate() as current_date_value
     from {{ model }}
     where {{ column_name }} > cast(getdate() as date)
     group by {{ column_name }}
@@ -49,9 +49,9 @@ with validation as (
 select
     date_value,
     invalid_count,
-    current_date,
+    current_date_value,
     'Date cannot be in the future' as error_message,
-    datediff(day, current_date, date_value) as days_in_future
+    datediff(day, current_date_value, date_value) as days_in_future
 from validation
 
 {% endtest %}

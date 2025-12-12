@@ -1,490 +1,879 @@
-# Multi-Environment Setup Guide
+# 🌍 Multi-Environment Setup Guide
 
-## 🎯 BONUS FEATURE: Multi-Environment Architecture (+5 points)
+> **Comprehensive guide for managing development, CI, and production environments**
 
-This project implements a complete multi-environment setup with **Development**, **Staging**, and **Production** environments.
+---
+
+## 📋 Table of Contents
+
+1. [Overview](#overview)
+2. [Environment Architecture](#environment-architecture)
+3. [Development Environment](#development-environment)
+4. [CI Environment](#ci-environment)
+5. [Production Environment](#production-environment)
+6. [Environment Configuration](#environment-configuration)
+7. [Environment Promotion](#environment-promotion)
+8. [Configuration Management](#configuration-management)
+
+---
+
+## Overview
+
+### Environment Strategy
+
+The DataOps project implements a **three-tier environment strategy**:
+
+| Environment           | Purpose                       | Infrastructure        | Data                     | Automation |
+| --------------------- | ----------------------------- | --------------------- | ------------------------ | ---------- |
+| **Development (dev)** | Local development and testing | Local Docker          | Sample/Test data         | Manual     |
+| **CI (ci)**           | Automated testing in PRs      | GitHub-hosted runners | Ephemeral container data | Automatic  |
+| **Production (prod)** | Production deployment         | Self-hosted runner    | Production data          | Automatic  |
+
+### Environment Isolation
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    SOURCE CODE (GitHub)                     │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                ┌─────────────┼─────────────┐
+                │             │             │
+                ▼             ▼             ▼
+         ┌──────────┐   ┌──────────┐   ┌──────────┐
+         │   DEV    │   │    CI    │   │   PROD   │
+         │  Local   │   │  GitHub  │   │Self-Host │
+         └──────────┘   └──────────┘   └──────────┘
+              │              │              │
+              ▼              ▼              ▼
+         Docker Comp    Temp Cont.    Docker Comp
+         Persistent     Ephemeral     Persistent
+         Volumes        Volumes       Volumes
+```
 
 ---
 
 ## Environment Architecture
 
+### Development Environment
+
+**Purpose**: Local development, testing, and debugging
+
+**Infrastructure**:
+
+- Local machine (Windows/Mac/Linux)
+- Docker Desktop
+- Docker Compose orchestration
+
+**Characteristics**:
+
+- ✅ Full control over environment
+- ✅ Persistent data volumes
+- ✅ Interactive debugging
+- ✅ UI access (Airflow, CloudBeaver)
+- ⚠️ Manual deployment
+- ⚠️ Single developer
+
+**Lifecycle**: Long-lived (days to weeks)
+
+---
+
+### CI Environment
+
+**Purpose**: Automated testing for Pull Requests
+
+**Infrastructure**:
+
+- GitHub-hosted runners (ubuntu-latest)
+- Ephemeral containers
+- Temporary volumes
+
+**Characteristics**:
+
+- ✅ Isolated per PR
+- ✅ Automated creation/teardown
+- ✅ Consistent environment
+- ✅ Fast feedback (<5 minutes)
+- ⚠️ No UI access
+- ⚠️ Limited resources (7GB RAM, 14GB disk)
+
+**Lifecycle**: Short-lived (minutes)
+
+---
+
+### Production Environment
+
+**Purpose**: Production deployment and operation
+
+**Infrastructure**:
+
+- Self-hosted GitHub Actions runner (Ubuntu 20.04)
+- Docker Compose orchestration
+- Persistent volumes
+
+**Characteristics**:
+
+- ✅ Automated deployment
+- ✅ Persistent data
+- ✅ High availability
+- ✅ Monitoring and alerts
+- ⚠️ Restricted access
+- ⚠️ Change control required
+
+**Lifecycle**: Long-lived (indefinite)
+
+---
+
+## Development Environment
+
+### Setup
+
+**Prerequisites**:
+
+- Docker Desktop installed
+- Git installed
+- 8GB RAM available
+- 10GB disk space
+
+**Installation Steps**:
+
+```powershell
+# 1. Clone repository
+git clone https://github.com/tienminhktvn/dataops-project.git
+cd dataops-project
+
+# 2. Checkout develop branch
+git checkout develop
+
+# 3. Create environment file (optional)
+echo "SLACK_WEBHOOK_URL=your_webhook_url" > .env
+
+# 4. Start infrastructure
+docker-compose up -d --build
+
+# 5. Wait for services to be ready
+Start-Sleep -Seconds 60
+
+# 6. Restore database
+docker exec dataops-sqlserver /bin/bash /tmp/restore_db.sh
+
+# 7. Run DBT models
+docker exec dataops-dbt dbt deps --profiles-dir .
+docker exec dataops-dbt dbt run --target dev --profiles-dir .
+
+# 8. Verify deployment
+docker ps
+docker exec dataops-dbt dbt test --target dev --profiles-dir .
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    DEVELOPMENT ENVIRONMENT                       │
-│  - Branch: develop                                              │
-│  - DBT Target: dev                                              │
-│  - Purpose: Daily development and testing                       │
-│  - Database: AdventureWorks2014 (dev schema)                   │
-│  - Auto-deploy: ON                                              │
-│  - Data Validation: Relaxed                                     │
-└─────────────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    STAGING ENVIRONMENT                           │
-│  - Branch: staging                                              │
-│  - DBT Target: staging                                          │
-│  - Purpose: Pre-production validation                           │
-│  - Database: AdventureWorks2014 (staging schema)               │
-│  - Auto-deploy: ON (after dev tests pass)                      │
-│  - Data Validation: Strict                                      │
-└─────────────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    PRODUCTION ENVIRONMENT                        │
-│  - Branch: main                                                 │
-│  - DBT Target: prod                                             │
-│  - Purpose: Live production data                                │
-│  - Database: AdventureWorks2014 (prod schema)                  │
-│  - Auto-deploy: ON (after staging validation)                  │
-│  - Data Validation: Strict + Monitoring                        │
-│  - Rollback: Enabled                                            │
-└─────────────────────────────────────────────────────────────────┘
+
+### Configuration
+
+**DBT Target: `dev`**
+
+Location: `dbt/profiles.yml`
+
+```yaml
+dev:
+  type: sqlserver
+  driver: ODBC Driver 17 for SQL Server
+  server: dataops-sqlserver
+  port: 1433
+  database: AdventureWorks2014
+  schema: dbo
+  user: sa
+  password: YourPassword123!
+  threads: 4
+  trust_cert: true
 ```
+
+**Airflow Configuration**:
+
+Location: `docker-compose.yml`
+
+```yaml
+environment:
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@dataops-postgres/airflow
+  AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+  AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+```
+
+### Access Points
+
+| Service        | URL                   | Credentials                   |
+| -------------- | --------------------- | ----------------------------- |
+| Airflow Web UI | http://localhost:8080 | admin / admin                 |
+| CloudBeaver    | http://localhost:8978 | Setup on first access         |
+| SQL Server     | localhost:1433        | sa / YourPassword123!         |
+| Postgres       | localhost:5432        | airflow / airflow             |
+| DBT Docs       | http://localhost:8001 | None (after `dbt docs serve`) |
+
+### Development Workflow
+
+```
+1. Create Feature Branch
+   git checkout -b feature/my-feature
+         │
+         ▼
+2. Modify Code (DBT models, Airflow DAGs)
+   Edit files in dbt/models/ or airflow/dags/
+         │
+         ▼
+3. Test Locally
+   docker exec dataops-dbt dbt run --select my_model --target dev
+   docker exec dataops-dbt dbt test --select my_model --target dev
+         │
+         ▼
+4. Verify in UI
+   - Check Airflow DAG execution
+   - Query data in CloudBeaver
+   - Review DBT documentation
+         │
+         ▼
+5. Commit & Push
+   git add .
+   git commit -m "feat: add my feature"
+   git push origin feature/my-feature
+         │
+         ▼
+6. Create Pull Request
+   GitHub UI -> New Pull Request
+         │
+         ▼
+7. CI Tests Run Automatically
+   Wait for GitHub Actions to pass
+         │
+         ▼
+8. Merge to develop
+   Triggers automatic deployment to dev environment
+```
+
+### Debugging Tips
+
+**View Logs**:
+
+```powershell
+# Airflow scheduler
+docker logs -f dataops-airflow-scheduler
+
+# DBT container
+docker logs -f dataops-dbt
+
+# SQL Server
+docker logs -f dataops-sqlserver
+```
+
+**Interactive Shell**:
+
+```powershell
+# Access DBT container
+docker exec -it dataops-dbt bash
+
+# Access Airflow scheduler
+docker exec -it dataops-airflow-scheduler bash
+
+# Access SQL Server
+docker exec -it dataops-sqlserver bash
+```
+
+**Test Individual Models**:
+
+```powershell
+# Run one model
+docker exec dataops-dbt dbt run --select brnz_sales_orders --target dev --profiles-dir .
+
+# Run with dependencies
+docker exec dataops-dbt dbt run --select +slvr_sales_orders --target dev --profiles-dir .
+
+# Run downstream models
+docker exec dataops-dbt dbt run --select slvr_sales_orders+ --target dev --profiles-dir .
+```
+
+---
+
+## CI Environment
+
+### Setup
+
+**Automatic Setup**: CI environment is created automatically by GitHub Actions when:
+
+- Pull Request is opened
+- New commits are pushed to an open PR
+
+**Workflow**: `.github/workflows/ci-dbt-test.yml`
+
+### Configuration
+
+**DBT Target: `ci`**
+
+Location: `dbt/profiles.yml`
+
+```yaml
+ci:
+  type: sqlserver
+  driver: ODBC Driver 17 for SQL Server
+  server: localhost
+  port: 1433
+  database: AdventureWorks2014
+  schema: dbo
+  user: sa
+  password: YourPassword123!
+  threads: 2
+  trust_cert: true
+```
+
+**Key Differences from Dev**:
+
+- `server: localhost` (ephemeral container, not Docker network name)
+- `threads: 2` (lower resource usage for CI runner)
+
+### CI Pipeline Steps
+
+```
+1. Checkout Code
+   ↓
+2. Start SQL Server Container
+   docker run -d -p 1433:1433 mcr.microsoft.com/mssql/server:2019-latest
+   ↓
+3. Restore AdventureWorks Database
+   Wait 60s → Restore .bak file → Verify
+   ↓
+4. Build DBT Image
+   docker build -t dbt-ci ./dbt
+   ↓
+5. Install DBT Dependencies
+   docker run dbt-ci dbt deps
+   ↓
+6. Parse DBT Models
+   docker run dbt-ci dbt parse --target ci
+   ↓
+7. Run DBT Models
+   docker run dbt-ci dbt run --target ci
+   ↓
+8. Run DBT Tests
+   docker run dbt-ci dbt test --target ci
+   ↓
+9. Generate Test Report
+   Parse results → Comment on PR
+```
+
+### CI Constraints
+
+**Runner Limitations**:
+
+- 7GB RAM
+- 14GB disk space
+- 2 CPU cores
+- No persistent storage
+
+**Optimizations for CI**:
+
+```yaml
+# Reduced threads
+threads: 2
+
+# Faster materialization
+models:
+  bronze:
+    +materialized: view # Instead of table
+```
+
+**Caching Strategy**:
+
+```yaml
+# Cache DBT packages
+- uses: actions/cache@v3
+  with:
+    path: dbt/dbt_packages
+    key: ${{ runner.os }}-dbt-${{ hashFiles('dbt/packages.yml') }}
+```
+
+### CI Testing Strategy
+
+**Test Levels**:
+
+1. ✅ **Parse**: Validate SQL syntax
+2. ✅ **Run**: Build all models
+3. ✅ **Test**: Execute data quality tests
+4. ✅ **Lint**: Check code style (separate workflow)
+
+**Coverage Requirements**:
+
+- All models must parse successfully
+- All models must build without errors
+- All data quality tests must pass
+
+### Troubleshooting CI Failures
+
+**Common Issues**:
+
+**SQL Syntax Error**:
+
+```yaml
+Error: compilation error in model brnz_sales_orders
+  Syntax error near 'FROM'
+
+Solution: Fix SQL syntax in model file
+```
+
+**Connection Timeout**:
+
+```yaml
+Error: Cannot connect to SQL Server at localhost:1433
+
+Solution: Increase wait time before DBT runs
+  - sleep 60 # Wait for SQL Server to be ready
+```
+
+**Out of Disk Space**:
+
+```yaml
+Error: No space left on device
+
+Solution: Clean up Docker images in CI
+  - docker system prune -f
+```
+
+---
+
+## Production Environment
+
+### Setup
+
+**Infrastructure**: Self-hosted GitHub Actions runner on Ubuntu 20.04
+
+**Prerequisites**:
+
+- Ubuntu server with Docker installed
+- GitHub Actions runner registered
+- Network access to GitHub
+- Sufficient resources (4GB RAM, 20GB disk)
+
+**Setup Steps**: See [SELF_HOSTED_RUNNER_SETUP.md](SELF_HOSTED_RUNNER_SETUP.md)
+
+### Configuration
+
+**DBT Target: `prod`**
+
+Location: `dbt/profiles.yml`
+
+```yaml
+prod:
+  type: sqlserver
+  driver: ODBC Driver 17 for SQL Server
+  server: dataops-sqlserver
+  port: 1433
+  database: AdventureWorks2014
+  schema: dbo
+  user: sa
+  password: YourPassword123!
+  threads: 8
+  trust_cert: true
+```
+
+**Key Differences from Dev**:
+
+- `threads: 8` (higher concurrency for production)
+- Same configuration otherwise (uses Docker network)
+
+**Airflow Configuration** (Production):
+
+```yaml
+environment:
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@dataops-postgres/airflow
+  AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+  AIRFLOW__SCHEDULER__CATCHUP_BY_DEFAULT: "false"
+  AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "false" # Security: Hide config in prod
+```
+
+### Deployment Pipeline
+
+**Trigger**: Push to `main` branch
+
+**Workflow**: `.github/workflows/cd-deploy.yml`
+
+```
+1. Determine Environment
+   Resolve to 'prod' based on branch
+   ↓
+2. Create Backup
+   Generate backup metadata with commit SHA
+   ↓
+3. Checkout Code
+   Pull latest code from main branch
+   ↓
+4. Stop Containers
+   docker-compose down
+   ↓
+5. Fix Permissions
+   chmod -R 777 airflow directories
+   ↓
+6. Rebuild & Restart
+   docker-compose up -d --build
+   ↓
+7. Wait for Health
+   Sleep 60 seconds
+   ↓
+8. Restore Database
+   Ensure AdventureWorks is available
+   ↓
+9. Run DBT
+   deps → run --target prod → test --target prod
+   ↓
+10. Validate
+    Check Airflow DAG is registered
+   ↓
+11. Notify
+    Send Slack notification (success/failure)
+```
+
+### Production Access
+
+**Restricted Access**:
+
+- Only via CI/CD pipelines
+- No direct SSH access for developers
+- Logs available in GitHub Actions
+- UI access only for admins
+
+**Monitoring**:
+
+- Slack notifications for deployment status
+- GitHub Actions logs for detailed information
+- Airflow UI for DAG execution monitoring
+
+### Production Safety Measures
+
+**Pre-Deployment Checks**:
+
+1. ✅ All CI tests must pass
+2. ✅ Code review approved
+3. ✅ Merged to main branch
+4. ✅ No concurrent deployments (concurrency control)
+
+**Backup Strategy**:
+
+- Backup metadata created before each deployment
+- Git tags for rollback points
+- Database backups (if needed)
+
+**Rollback Capability**:
+
+- Automated rollback workflow available
+- Can rollback to any previous commit
+- Rollback time: ~3-5 minutes
 
 ---
 
 ## Environment Configuration
 
-### 1. Development Environment
+### Configuration Files
 
-**Purpose:** Rapid development and testing
+| File                      | Purpose                 | Environments         |
+| ------------------------- | ----------------------- | -------------------- |
+| `dbt/profiles.yml`        | DBT connection settings | All (dev, ci, prod)  |
+| `docker-compose.yml`      | Container orchestration | Dev, Prod            |
+| `.github/workflows/*.yml` | CI/CD pipelines         | CI, Prod             |
+| `.env`                    | Environment variables   | Dev, Prod (optional) |
+| `dbt/dbt_project.yml`     | DBT project config      | All                  |
 
-**Configuration:**
-```yaml
-# dbt/profiles.yml - dev target
-dev:
-  type: sqlserver
-  server: sqlserver
-  database: AdventureWorks2014
-  schema: dbo
-  target_schema_prefix: dev_
-  threads: 4
-  timeout_seconds: 300
+### Environment Variables
+
+**Development**:
+
+```bash
+# Optional .env file
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
 ```
 
-**Features:**
-- Fast iteration
-- Relaxed test thresholds
-- Sample data allowed
-- No rollback needed
-- Email notifications: OFF
+**CI** (GitHub Secrets):
 
-**Access:**
-```bash
-# Run locally against dev
-dbt run --target dev
+```yaml
+# No secrets required (uses default passwords)
+# SQL Server runs in ephemeral container
+```
 
-# View dev data
-SELECT * FROM dev_bronze.brnz_sales_orders
+**Production** (GitHub Secrets):
+
+```yaml
+SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+# Injected into .env file during deployment
+```
+
+### Configuration Differences
+
+| Setting                 | Dev               | CI        | Prod              |
+| ----------------------- | ----------------- | --------- | ----------------- |
+| **DBT Threads**         | 4                 | 2         | 8                 |
+| **SQL Server Host**     | dataops-sqlserver | localhost | dataops-sqlserver |
+| **Data Persistence**    | Yes               | No        | Yes               |
+| **Airflow Examples**    | false             | N/A       | false             |
+| **Expose Config**       | true              | N/A       | false             |
+| **Slack Notifications** | Optional          | No        | Yes               |
+| **Catchup**             | true              | N/A       | false             |
+
+### DBT Variables
+
+**Default Values** (`dbt_project.yml`):
+
+```yaml
+vars:
+  start_date: "2011-05-31"
+  end_date: "2014-06-30"
+  high_value_threshold: 1000
+  medium_value_threshold: 100
+  top_performer_revenue: 50000
+  medium_performer_revenue: 10000
+```
+
+**Override Per Environment**:
+
+```powershell
+# Development: Test with smaller date range
+docker exec dataops-dbt dbt run --vars '{start_date: 2014-01-01, end_date: 2014-03-31}' --target dev --profiles-dir .
+
+# Production: Use full date range (default)
+docker exec dataops-dbt dbt run --target prod --profiles-dir .
 ```
 
 ---
 
-### 2. Staging Environment
+## Environment Promotion
 
-**Purpose:** Pre-production validation with production-like data
+### Promotion Flow
 
-**Configuration:**
-```yaml
-# dbt/profiles.yml - staging target
-staging:
-  type: sqlserver
-  server: sqlserver
-  database: AdventureWorks2014
-  schema: dbo
-  target_schema_prefix: staging_
-  threads: 6
-  timeout_seconds: 600
+```
+Feature Branch
+     │
+     ├─ PR Created → CI Tests
+     ↓
+   develop
+     │
+     ├─ Push → Auto Deploy to Dev
+     ↓
+   main
+     │
+     └─ Push → Auto Deploy to Prod
 ```
 
-**Features:**
-- Production-like environment
-- Full data volume
-- Strict test thresholds
-- Performance benchmarking
-- Email notifications: Team leads only
+### Promotion Checklist
 
-**Access:**
+**Develop → Main**:
+
+1. ✅ **All CI tests pass**
+
+   - DBT parse successful
+   - All models build
+   - All tests pass
+   - Lint checks pass
+   - PR validation pass
+
+2. ✅ **Code review approved**
+
+   - At least 1 approval
+   - No unresolved comments
+
+3. ✅ **Dev environment validated**
+
+   - Manual testing completed
+   - No runtime errors
+   - Data quality verified
+
+4. ✅ **Documentation updated**
+
+   - README.md reflects changes
+   - Model documentation current
+   - Schema.yml updated
+
+5. ✅ **Breaking changes documented**
+   - Migration plan if needed
+   - Backward compatibility verified
+
+### Promotion Process
+
+**Step 1: Prepare Main Branch**
+
 ```bash
-# Deploy to staging
-git push origin staging
-
-# Manual deployment
-dbt run --target staging
-```
-
-**Validation Gates:**
-- ✅ All unit tests pass
-- ✅ Data quality tests pass
-- ✅ Performance benchmarks met
-- ✅ No schema breaking changes
-- ✅ Documentation updated
-
----
-
-### 3. Production Environment
-
-**Purpose:** Live production data serving business users
-
-**Configuration:**
-```yaml
-# dbt/profiles.yml - prod target
-prod:
-  type: sqlserver
-  server: "{{ env_var('PROD_SQL_SERVER') }}"
-  database: "{{ env_var('PROD_DATABASE') }}"
-  schema: dbo
-  target_schema_prefix: prod_
-  threads: 8
-  timeout_seconds: 900
-  encrypt: True
-```
-
-**Features:**
-- High availability
-- Monitoring and alerting
-- Automatic rollback on failure
-- Change approval required
-- Email notifications: All stakeholders
-
-**Access:**
-```bash
-# Deploy to production (only from main branch)
-git push origin main
-
-# View production data (read-only for most users)
-SELECT * FROM prod_gold.gld_sales_summary
-```
-
-**Production Safeguards:**
-- ✅ Requires staging approval
-- ✅ Backup before deployment
-- ✅ Blue-green deployment ready
-- ✅ Rollback capability
-- ✅ 24/7 monitoring
-
----
-
-## Deployment Pipeline
-
-### Development → Staging → Production
-
-```yaml
-# Enhanced cd-deploy.yml with staging
-on:
-  push:
-    branches:
-      - develop   # Deploy to dev
-      - staging   # Deploy to staging
-      - main      # Deploy to prod
-```
-
-**Promotion Process:**
-
-1. **Develop → Staging:**
-```bash
-# Create PR from develop to staging
+# Ensure develop is up to date
 git checkout develop
 git pull origin develop
-git checkout staging
-git merge develop
-git push origin staging
+
+# Create release branch (optional)
+git checkout -b release/v1.1.0
+```
+
+**Step 2: Create Pull Request**
+
+```bash
+# Push to GitHub
+git push origin release/v1.1.0
+
+# Create PR: release/v1.1.0 → main
+# Title: "Release v1.1.0: Feature XYZ"
+# Description: List of changes, testing notes
+```
+
+**Step 3: Review & Merge**
+
+```bash
+# Wait for CI checks to pass
+# Obtain code review approval
+# Merge to main (using "Squash and merge" or "Merge commit")
+```
+
+**Step 4: Monitor Deployment**
+
+```bash
 # Automatic deployment triggered
+# Monitor GitHub Actions workflow
+# Check Slack notification
+# Verify in production Airflow UI
 ```
 
-2. **Staging → Production:**
+**Step 5: Validate Production**
+
 ```bash
-# Create PR from staging to main (requires approval)
-git checkout staging
-git pull origin staging
+# Check DBT models built successfully
+# Verify data quality tests pass
+# Monitor Airflow DAG execution
+# Check data freshness
+```
+
+### Rollback Procedure
+
+If production deployment fails or issues are discovered:
+
+**Option 1: Automated Rollback**
+
+```bash
+# Via GitHub UI:
+Actions → CD - Rollback Deployment → Run workflow
+  Environment: prod
+  Backup SHA: <previous_commit> or leave empty
+  Reason: "Issue with feature XYZ"
+```
+
+**Option 2: Revert Commit**
+
+```bash
+# Revert the problematic commit on main
 git checkout main
-git merge staging
+git pull
+git revert <bad_commit_sha>
 git push origin main
-# Automatic deployment triggered with extra validations
+
+# Automatic deployment to prod triggered
 ```
 
 ---
 
-## Environment Variables
+## Configuration Management
 
-### GitHub Secrets Setup
+### Best Practices
 
-```bash
-# Development (optional, uses docker defaults)
-# No secrets needed - uses docker-compose
-
-# Staging
-STAGING_SQL_SERVER=staging-db.example.com
-STAGING_SQL_USER=staging_user
-STAGING_SQL_PASSWORD=***secure***
-STAGING_DATABASE=AdventureWorks2014
-
-# Production
-PROD_SQL_SERVER=prod-db.example.com
-PROD_SQL_USER=prod_user
-PROD_SQL_PASSWORD=***secure***
-PROD_DATABASE=AdventureWorks2014
-PROD_BACKUP_ENABLED=true
-PROD_MONITORING_ENABLED=true
-```
-
-### Set in GitHub:
-```
-Settings → Secrets and variables → Actions → New repository secret
-```
-
----
-
-## DBT Project Configuration
-
-### Environment-Specific Configs
+**1. Never Hardcode Credentials**
 
 ```yaml
-# dbt_project.yml
-models:
-  dataops_project:
-    bronze:
-      +materialized: view
-      +schema: "{{ 'dev_bronze' if target.name == 'dev' else 'bronze' }}"
+# ❌ Bad
+password: MySecretPassword123
 
-    silver:
-      +materialized: table
-      +schema: "{{ 'dev_silver' if target.name == 'dev' else 'silver' }}"
-
-    gold:
-      +materialized: table
-      +schema: "{{ 'dev_gold' if target.name == 'dev' else 'gold' }}"
+# ✅ Good
+password: {{ env_var('DB_PASSWORD') }}  # From environment
 ```
 
-### Target-Specific Variables
+**2. Use DBT Variables for Business Logic**
 
 ```yaml
-# dbt_project.yml - vars section
-vars:
-  # Override per environment
-  dev:
-    data_start_date: '2014-01-01'
-    data_end_date: '2014-12-31'
-    enable_sampling: true
-    sample_percentage: 10
+# ❌ Bad (hardcoded in SQL)
+WHERE revenue > 1000
 
-  staging:
-    data_start_date: '2011-01-01'
-    data_end_date: '2014-12-31'
-    enable_sampling: false
-
-  prod:
-    data_start_date: '2011-01-01'
-    data_end_date: '2025-12-31'
-    enable_sampling: false
-    enable_monitoring: true
+# ✅ Good (configurable)
+WHERE revenue > {{ var('high_value_threshold') }}
 ```
 
----
+**3. Environment-Specific Configuration**
 
-## Testing Strategy by Environment
+```yaml
+# profiles.yml - Use target-specific settings
+prod:
+  threads: 8
 
-### Development
-- Basic schema tests only
-- Fast execution
-- Warnings don't block deployment
-
-### Staging
-- Full test suite
-- Performance tests
-- Data quality thresholds: Warning on 5%, Error on 10%
-- Must pass before promotion
-
-### Production
-- Full test suite + smoke tests
-- Strict data quality thresholds: Warning on 1%, Error on 5%
-- Post-deployment monitoring
-- Automatic rollback on critical failures
-
----
-
-## Monitoring Dashboard
-
-### Environment Health Dashboard
-
-```sql
--- Query to check environment health
-SELECT
-    environment,
-    last_deployment_time,
-    deployment_status,
-    test_pass_rate,
-    data_freshness_status
-FROM monitoring.environment_health
-WHERE environment IN ('dev', 'staging', 'prod')
+dev:
+  threads: 4
 ```
 
-### Metrics Tracked:
-- Deployment frequency
-- Test pass rate
-- Data freshness
-- Query performance
-- Error rates
+**4. Keep Secrets in GitHub Secrets**
 
----
+```yaml
+# Never commit to Git:
+# - Passwords
+# - API keys
+# - Webhook URLs
+# - Tokens
 
-## Best Practices
-
-### 1. **Never Skip Environments**
-- ✅ Always deploy: dev → staging → prod
-- ❌ Never deploy directly to prod
-- ❌ Never skip staging validation
-
-### 2. **Environment Parity**
-- Keep staging as close to prod as possible
-- Use production-like data volume
-- Same hardware specs (if possible)
-
-### 3. **Data Isolation**
-- Each environment has separate schemas
-- No cross-environment queries
-- Clear naming conventions
-
-### 4. **Access Control**
-```
-Development: All developers (read/write)
-Staging: Developers (read), Data Engineers (write)
-Production: Analysts (read), DevOps (write with approval)
+# Store in GitHub Settings → Secrets → Actions
 ```
 
-### 5. **Deployment Windows**
-```
-Development: 24/7 (anytime)
-Staging: Business hours (for testing)
-Production: Maintenance windows only (weekends, off-hours)
-```
+### Configuration Testing
 
----
+**Test Configuration Changes**:
 
-## Troubleshooting
+```powershell
+# Test DBT connection
+docker exec dataops-dbt dbt debug --target dev --profiles-dir .
 
-### Issue: Environment-specific tests failing
+# Test Docker Compose configuration
+docker-compose config
 
-**Solution:**
-```bash
-# Check target-specific configuration
-dbt debug --target staging
-
-# Verify environment variables
-echo $STAGING_SQL_SERVER
+# Test Airflow DAG parsing
+docker exec dataops-airflow-scheduler python /opt/airflow/dags/dbt_pipeline_dag.py
 ```
 
-### Issue: Data differences between environments
+### Version Control
 
-**Solution:**
-```sql
--- Compare row counts across environments
-SELECT
-    'dev' as env, COUNT(*) as row_count
-FROM dev_gold.gld_sales_summary
-UNION ALL
-SELECT
-    'staging' as env, COUNT(*)
-FROM staging_gold.gld_sales_summary
-UNION ALL
-SELECT
-    'prod' as env, COUNT(*)
-FROM prod_gold.gld_sales_summary
-```
+**Track in Git**:
+
+- ✅ `dbt/profiles.yml` (without passwords)
+- ✅ `docker-compose.yml`
+- ✅ `.github/workflows/*.yml`
+- ✅ `dbt/dbt_project.yml`
+
+**Don't Track in Git**:
+
+- ❌ `.env` (contains secrets)
+- ❌ `airflow/logs/` (runtime logs)
+- ❌ `dbt/target/` (compiled artifacts)
+- ❌ `dbt/logs/` (DBT logs)
 
 ---
 
-## Rollback Procedures by Environment
+## Environment Comparison Matrix
 
-### Development
-- No rollback needed (just redeploy)
-
-### Staging
-- Manual rollback if tests fail
-- Use `cd-rollback.yml` workflow
-
-### Production
-- Automatic rollback on critical failure
-- Manual rollback for non-critical issues
-- Requires team approval
-- Must notify stakeholders
-
----
-
-## Cost Optimization
-
-### Resource Allocation by Environment
-
-| Environment | Database Size | Compute | Storage | Monthly Cost |
-|-------------|--------------|---------|---------|--------------|
-| Development | Small (10GB) | 2 cores | 50GB | $50 |
-| Staging | Medium (100GB) | 4 cores | 200GB | $200 |
-| Production | Large (1TB) | 8 cores | 2TB | $1000 |
-
-### Cost Saving Tips:
-1. **Dev**: Auto-pause when not in use
-2. **Staging**: Scale down outside business hours
-3. **Prod**: Right-size based on usage patterns
+| Feature             | Development         | CI                   | Production             |
+| ------------------- | ------------------- | -------------------- | ---------------------- |
+| **Purpose**         | Local dev & testing | Automated PR testing | Production operation   |
+| **Infrastructure**  | Local Docker        | GitHub-hosted runner | Self-hosted runner     |
+| **Trigger**         | Manual              | PR open/update       | Push to main           |
+| **Data**            | Persistent          | Ephemeral            | Persistent             |
+| **Threads**         | 4                   | 2                    | 8                      |
+| **UI Access**       | Yes (localhost)     | No                   | Admin only             |
+| **Logs**            | Local files         | GitHub Actions       | GitHub Actions + Slack |
+| **Deployment Time** | Manual (~5 min)     | Automatic (~3 min)   | Automatic (~5 min)     |
+| **Rollback**        | Manual              | N/A                  | Automated workflow     |
+| **Monitoring**      | Local logs          | GitHub checks        | Slack + GitHub         |
+| **Access**          | Developer           | Automated            | Admin only             |
 
 ---
 
-## Compliance & Security
+## Related Documentation
 
-### Environment-Specific Security
-
-**Development:**
-- Sample/masked data
-- No PII (Personal Identifiable Information)
-- Open access for team
-
-**Staging:**
-- Production-like data (masked PII)
-- Restricted access
-- Audit logs enabled
-
-**Production:**
-- Real data with full PII
-- Strict access control
-- Encryption at rest and in transit
-- Full audit trail
-- Compliance monitoring (GDPR, HIPAA)
+- **[DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md)** - Deployment procedures and troubleshooting
+- **[SELF_HOSTED_RUNNER_SETUP.md](SELF_HOSTED_RUNNER_SETUP.md)** - CI/CD runner setup guide
+- **[TESTING_STRATEGY.md](TESTING_STRATEGY.md)** - Testing approach across environments
+- **[ARCHITECTURE_DIAGRAM.md](ARCHITECTURE_DIAGRAM.md)** - System architecture overview
 
 ---
 
-## Success Metrics
-
-### KPIs by Environment
-
-**Development:**
-- ✅ Deployment frequency: 10+ per day
-- ✅ Build time: < 5 minutes
-- ✅ Test coverage: > 70%
-
-**Staging:**
-- ✅ Promotion success rate: > 95%
-- ✅ Bug detection rate: > 80% before prod
-- ✅ Performance within 10% of prod
-
-**Production:**
-- ✅ Uptime: 99.9%
-- ✅ Deployment success rate: > 99%
-- ✅ Zero data loss incidents
-- ✅ Rollback time: < 15 minutes
-
----
-
-## Conclusion
-
-This multi-environment setup provides:
-
-✅ **Safe deployment pipeline** with validation at each stage
-✅ **Production resilience** with rollback capability
-✅ **Cost optimization** through right-sizing
-✅ **Compliance** with security best practices
-✅ **Quality gates** preventing bad deployments
-
-**BONUS POINTS EARNED: +5**
-
-This implementation demonstrates production-grade DevOps practices and would be suitable for enterprise deployment.
+**Last Updated**: December 2025  
+**Version**: 1.0.0  
+**Maintained By**: DataOps Project Team

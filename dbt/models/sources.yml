@@ -16,9 +16,9 @@ sources:
 
     # Source Freshness Configuration
     freshness:
-      warn_after: {count: 30, period: day}  # Warning after 30 days
-      error_after: {count: 7300, period: day}  # 20 year
-    loaded_at_field: ModifiedDate  # Column tracking last update time
+      warn_after: { count: 30, period: day } # Warning after 30 days
+      error_after: { count: 7300, period: day } # 20 year
+    loaded_at_field: ModifiedDate # Column tracking last update time
     tables:
       # -----------------------------------------------------------------------
       # Sales Order Header
@@ -133,8 +133,8 @@ sources:
     database: AdventureWorks2014
     schema: Production
     freshness:
-      warn_after: {count: 30, period: day}
-      error_after: {count: 7300, period: day}  # 20 years
+      warn_after: { count: 30, period: day }
+      error_after: { count: 7300, period: day } # 20 years
     loaded_at_field: ModifiedDate
     tables:
       # -----------------------------------------------------------------------
@@ -236,8 +236,8 @@ sources:
     database: AdventureWorks2014
     schema: Person
     freshness:
-      warn_after: {count: 30, period: day}
-      error_after: {count: 7300, period: day}  # 20 years
+      warn_after: { count: 30, period: day }
+      error_after: { count: 7300, period: day } # 20 years
     loaded_at_field: ModifiedDate
     tables:
       # -----------------------------------------------------------------------

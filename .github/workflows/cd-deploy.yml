@@ -6,8 +6,8 @@ name: CD - Deploy Pipeline
 on:
   push:
     branches:
-      - main # Production Environment
-      - develop # Development Environment
+      - main
+      - develop
     paths:
       - dbt/**
       - airflow/**
@@ -65,12 +65,47 @@ jobs:
 
     steps:
       # -----------------------------------------------------------------------
-      # Code Update & Backup
+      # Cleanup & Prepare
+      # -----------------------------------------------------------------------
+      - name: Clean Workspace
+        run: |
+          echo "🧹 Force cleaning workspace..."
+
+          # Force stop and remove all containers
+          docker compose down --remove-orphans 2>/dev/null || true
+          docker stop $(docker ps -aq) 2>/dev/null || true
+
+          # Wait for containers to fully stop
+          echo "⏳ Waiting 5s for containers to stop..."
+          sleep 5
+
+          # Kill any remaining DBT/Python processes
+          pkill -9 dbt 2>/dev/null || true
+          pkill -9 python 2>/dev/null || true
+
+          # Force remove directories with sudo
+          echo "🗑️ Removing old files..."
+          for dir in dbt/dbt_packages dbt/target dbt/logs airflow/logs; do
+            if [ -d "$dir" ]; then
+              echo "  Removing $dir"
+              sudo chmod -R 777 "$dir" 2>/dev/null || true
+              sudo rm -rf "$dir" 2>/dev/null || true
+            fi
+          done
+
+          # Recreate necessary directories
+          mkdir -p dbt/logs airflow/logs
+          sudo chmod 777 dbt/logs airflow/logs
+
+          echo "✅ Workspace cleaned"
+
+      # -----------------------------------------------------------------------
+      # Code Update
       # -----------------------------------------------------------------------
       - name: Checkout Code
         uses: actions/checkout@v3
         with:
-          clean: false
+          clean: true
 
       - name: Create Backup Metadata
         if: needs.determine-env.outputs.env_name == 'prod'
@@ -240,3 +275,26 @@ jobs:
             echo "Check Slack or Logs for details." >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
+
+  # ===========================================================================
+  # Post-Deployment Cleanup
+  # ===========================================================================
+  cleanup:
+    name: Cleanup
+    runs-on: self-hosted
+    needs: [deploy-and-test]
+    if: always()
+    steps:
+      - name: Fix Permissions
+        run: |
+          echo "🧹 Fixing permissions for next run..."
+          if [ -d "dbt/dbt_packages" ]; then
+            sudo chmod -R 777 dbt/dbt_packages || true
+          fi
+          if [ -d "dbt/target" ]; then
+            sudo chmod -R 777 dbt/target || true
+          fi
+          if [ -d "dbt/logs" ]; then
+            sudo chmod -R 777 dbt/logs || true
+          fi
+          echo "✅ Cleanup complete"
